@@ -1,7 +1,7 @@
 from pyomo.environ import SolverFactory, value, Var, Constraint, TransformationFactory
 from pyomo.gdp import Disjunct
 import pyomo.common.unittest as unittest
-from pyomo.contrib.gdpopt.tests.four_stage_dynamic_model import build_model
+from pyomo.contrib.gdpopt.tests.four_stage_dynamic_model import build_model, build_discretized_disjunction
 
 
 class TestGDPoptLDSDA(unittest.TestCase):
@@ -14,6 +14,9 @@ class TestGDPoptLDSDA(unittest.TestCase):
     def test_solve_four_stage_dynamic_model(self):
 
         model = build_model(mode_transfer=True)
+
+        # Mutate the model by creating sub-blocks that replicate and then deactivate the original constraints.
+        build_discretized_disjunction(model)
 
         # Discretize the model using dae.collocation
         discretizer = TransformationFactory('dae.collocation')

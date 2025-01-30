@@ -13,6 +13,9 @@ from pyomo.core import (
     lor,
     BooleanVar,
     land,
+    Block,
+    Reference,
+    TransformationFactory,
 )
 from pyomo.dae import Integral, DerivativeVar, ContinuousSet
 from pyomo.gdp import Disjunct, Disjunction
@@ -387,5 +390,87 @@ def build_model(mode_transfer=False):
     return model
 
 
-def build_discretized_model():
-    pass
+def build_discretized_disjunction(m):
+    """
+    Create a sub-block in each Disjunct that replicates the ODE constraints
+    and references the same time sets and Vars from the top-level model.
+    This 'mutates' the model in-place, but does NOT alter the build_model code.
+
+    Returns the same model m.
+    """
+
+    # For each (stage, mode) disjunct, we identify the correct:
+    #   - time set (m.t1, m.t2, etc.)
+    #   - state var (m.x1, m.x2, etc.)
+    #   - derivative var (m.dxdt1, m.dxdt2, etc.)
+    #   - ODE constraint in the disjunct (mode1_dynamic_constraint, etc.)
+
+    for s in m.stage:
+        for mod in m.mode:
+            disj = m.stage_mode[s, mod]
+
+            # Identify which time set & variables to reference based on the stage
+            if s == 1:
+                time_set = m.t1
+                x_var = m.x1
+                dx_var = m.dxdt1
+                # The relevant ODE constraint depends on the mode
+                if mod == 1:
+                    original_con = disj.mode1_dynamic_constraint
+                elif mod == 2:
+                    original_con = disj.mode2_dynamic_constraint
+                else:
+                    original_con = disj.mode3_dynamic_constraint
+
+            elif s == 2:
+                time_set = m.t2
+                x_var = m.x2
+                dx_var = m.dxdt2
+                if mod == 1:
+                    original_con = disj.mode1_dynamic_constraint
+                elif mod == 2:
+                    original_con = disj.mode2_dynamic_constraint
+                else:
+                    original_con = disj.mode3_dynamic_constraint
+
+            elif s == 3:
+                time_set = m.t3
+                x_var = m.x3
+                dx_var = m.dxdt3
+                if mod == 1:
+                    original_con = disj.mode1_dynamic_constraint
+                elif mod == 2:
+                    original_con = disj.mode2_dynamic_constraint
+                else:
+                    original_con = disj.mode3_dynamic_constraint
+
+            else:  # s == 4
+                time_set = m.t4
+                x_var = m.x4
+                dx_var = m.dxdt4
+                if mod == 1:
+                    original_con = disj.mode1_dynamic_constraint
+                elif mod == 2:
+                    original_con = disj.mode2_dynamic_constraint
+                else:
+                    original_con = disj.mode3_dynamic_constraint
+
+            # Create a sub-block on the disjunct
+            disj.discretization_block = Block()
+            b = disj.discretization_block
+
+            # Reference the top-level sets/vars
+            b.t = Reference(time_set)   # e.g. m.t1
+            b.x = Reference(x_var)      # e.g. m.x1
+            b.dxdt = Reference(dx_var)  # e.g. m.dxdt1
+
+            # Now replicate the ODE constraint rule inside this block
+            def _new_ode_rule(bl, t_):
+                return original_con[t_].expr  # same expression "dxdt == something"
+
+            b.ode = Constraint(b.t, rule=_new_ode_rule)
+
+            # Deactivate original constraint so we don't double-constrain the ODE
+            original_con.deactivate()
+
+    return m
