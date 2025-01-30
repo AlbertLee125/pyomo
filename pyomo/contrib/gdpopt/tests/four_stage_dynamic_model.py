@@ -385,3 +385,7 @@ def build_model(mode_transfer=False):
         expr=-(model.intx1 + model.intx2 + model.intx3 + model.intx4), sense=minimize
     )
     return model
+
+
+def build_discretized_model():
+    pass
