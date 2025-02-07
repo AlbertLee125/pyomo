@@ -17,3 +17,5 @@ def load():
     import pyomo.contrib.gdpopt.loa
     import pyomo.contrib.gdpopt.ric
     import pyomo.contrib.gdpopt.enumerate
+    import pyomo.contrib.gdpopt.ldsda
+    import pyomo.contrib.gdpopt.ldbd
