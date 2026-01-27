@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2022
+#  Copyright (c) 2008-2025
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -10,6 +10,7 @@
 #  ___________________________________________________________________________
 
 from collections import namedtuple
+import itertools as it
 import traceback
 from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.common.errors import InfeasibleConstraintException
@@ -39,7 +40,6 @@ from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
 from pyomo.common.dependencies import attempt_import
 
-it, it_available = attempt_import('itertools')
 tabulate, tabulate_available = attempt_import('tabulate')
 
 # Data tuple for external variables.
@@ -56,7 +56,7 @@ ExternalVarInfo = namedtuple(
 
 @SolverFactory.register(
     'gdpopt.ldsda',
-    doc="The LD-SDA (Logic-based Discrete-Steepest Descent Algorithm)"
+    doc="The LD-SDA (Logic-based Discrete-Steepest Descent Algorithm) "
     "Generalized Disjunctive Programming (GDP) solver",
 )
 class GDP_LDSDA_Solver(_GDPoptAlgorithm):
@@ -84,15 +84,12 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         return super().solve(model, **kwds)
 
     def _log_citation(self, config):
-        config.logger.info(
-            "\n"
-            + """- LDSDA algorithm:
+        config.logger.info("\n" + """- LDSDA algorithm:
         Bernal DE, Ovalle D, Liñán DA, Ricardez-Sandoval LA, Gómez JM, Grossmann IE.
         Process Superstructure Optimization through Discrete Steepest Descent Optimization: a GDP Analysis and Applications in Process Intensification.
         Computer Aided Chemical Engineering 2022 Jan 1 (Vol. 49, pp. 1279-1284). Elsevier.
         https://doi.org/10.1016/B978-0-323-85159-6.50213-X
-        """.strip()
-        )
+        """.strip())
 
     def _solve_gdp(self, model, config):
         """Solve the GDP model.
@@ -118,11 +115,12 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         add_disjunct_list(util_block)
         add_algebraic_variable_list(util_block)
         add_boolean_variable_lists(util_block)
+        util_block.config_disjunction_list = config.disjunction_list
+        util_block.config_logical_constraint_list = config.logical_constraint_list
 
         # We will use the working_model to perform the LDSDA search.
         self.working_model = model.clone()
-        # TODO: I don't like the name way, try something else?
-        self.working_model_util_block = self.working_model.component(util_block.name)
+        self.working_model_util_block = self.working_model.find_component(util_block)
 
         add_disjunction_list(self.working_model_util_block)
         TransformationFactory('core.logical_to_linear').apply_to(self.working_model)
@@ -169,50 +167,39 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         Returns
         -------
         bool
-            weather the primal bound is improved
+            True if the primal bound is improved
         """
         self.fix_disjunctions_with_external_var(external_var_value)
         subproblem = self.working_model.clone()
         TransformationFactory('core.logical_to_linear').apply_to(subproblem)
 
-        try:
-            with SuppressInfeasibleWarning():
-                try:
-                    TransformationFactory('gdp.bigm').apply_to(subproblem)
-                    fbbt(subproblem, integer_tol=config.integer_tolerance)
-                    TransformationFactory('contrib.detect_fixed_vars').apply_to(
-                        subproblem
-                    )
-                    TransformationFactory('contrib.propagate_fixed_vars').apply_to(
-                        subproblem
-                    )
-                    TransformationFactory(
-                        'contrib.deactivate_trivial_constraints'
-                    ).apply_to(subproblem, tmp=False, ignore_infeasible=False)
-                except InfeasibleConstraintException:
-                    return False, None
-                minlp_args = dict(config.minlp_solver_args)
-                if config.time_limit is not None and config.minlp_solver == 'gams':
-                    elapsed = get_main_elapsed_time(self.timing)
-                    remaining = max(config.time_limit - elapsed, 1)
-                    minlp_args['add_options'] = minlp_args.get('add_options', [])
-                    minlp_args['add_options'].append('option reslim=%s;' % remaining)
-                result = SolverFactory(config.minlp_solver).solve(
-                    subproblem, **minlp_args
+        with SuppressInfeasibleWarning():
+            try:
+                TransformationFactory('gdp.bigm').apply_to(subproblem)
+                fbbt(subproblem, integer_tol=config.integer_tolerance)
+                TransformationFactory('contrib.detect_fixed_vars').apply_to(subproblem)
+                TransformationFactory('contrib.propagate_fixed_vars').apply_to(
+                    subproblem
                 )
-                # Retrieve the primal bound (objective value) from the Pyomo model
-                obj = next(subproblem.component_data_objects(Objective, active=True))
-                primal_bound = value(obj)  # Extract the objective value using value()
-                primal_improved = self._handle_subproblem_result(
-                    result, subproblem, external_var_value, config, search_type
-                )
-            return primal_improved
-        except RuntimeError as e:
-            config.logger.warning(
-                "Solver encountered RuntimeError. Treating as infeasible. "
-                "Msg: %s\n%s" % (str(e), traceback.format_exc())
+                TransformationFactory(
+                    'contrib.deactivate_trivial_constraints'
+                ).apply_to(subproblem, tmp=False, ignore_infeasible=False)
+            except InfeasibleConstraintException:
+                return False, None
+            minlp_args = dict(config.minlp_solver_args)
+            if config.time_limit is not None and config.minlp_solver == 'gams':
+                elapsed = get_main_elapsed_time(self.timing)
+                remaining = max(config.time_limit - elapsed, 1)
+                minlp_args['add_options'] = minlp_args.get('add_options', [])
+                minlp_args['add_options'].append('option reslim=%s;' % remaining)
+            result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
+            # Retrieve the primal bound (objective value) from the subproblem
+            obj = next(subproblem.component_data_objects(Objective, active=True))
+            primal_bound = value(obj)
+            primal_improved = self._handle_subproblem_result(
+                result, subproblem, external_var_value, config, search_type
             )
-            return False, None
+        return primal_improved, primal_bound
 
     def _get_external_information(self, util_block, config):
         """Function that obtains information from the model to perform the reformulation with external variables.
@@ -220,14 +207,14 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         Parameters
         ----------
         util_block : Block
-            The GDPOPT utility block of the model.
+            The GDPopt utility block of the model.
         config : ConfigBlock
-            GDPopt configuration block
+            GDPopt configuration block.
 
         Raises
         ------
         ValueError
-            exactly_number is greater than 1
+            The exactly_number of the exactly constraint is greater than 1.
         """
         util_block.external_var_info_list = []
         model = util_block.parent_block()
@@ -238,10 +225,12 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         # for c in util_block.logical_constraint_list:
         #     if isinstance(c.body, ExactlyExpression):
         if config.logical_constraint_list is not None:
-            for constraint_name in config.logical_constraint_list:
+            for c in util_block.config_logical_constraint_list:
+                if not isinstance(c.body, ExactlyExpression):
+                    raise ValueError(
+                        "The logical_constraint_list config should be a list of ExactlyExpression logical constraints."
+                    )
                 # TODO: in the first version, we don't support more than one exactly constraint.
-                # TODO: if we use component instead of model.find_component, it will fail.
-                c = model.find_component(constraint_name)
                 exactly_number = c.body.args[0]
                 if exactly_number > 1:
                     raise ValueError("The function only works for exactly_number = 1")
@@ -262,10 +251,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     ]
                 )
         if config.disjunction_list is not None:
-            for disjunction_name in config.disjunction_list:
-                # TODO: in the first version, we don't support more than one exactly constraint.
-                # TODO: if we use component instead of model.find_component, it will fail.
-                disjunction = model.find_component(disjunction_name)
+            for disjunction in util_block.config_disjunction_list:
                 sorted_boolean_var_list = [
                     disjunct.indicator_var for disjunct in disjunction.disjuncts
                 ]
@@ -299,7 +285,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         )
         if self.number_of_external_variables != len(config.starting_point):
             raise ValueError(
-                "The length of the provided starting point doesn't equal to the number of disjunctions."
+                "The length of the provided starting point doesn't equal the number of disjunctions."
             )
 
     def fix_disjunctions_with_external_var(self, external_var_values_list):
@@ -350,11 +336,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             directions = list(it.product([-1, 0, 1], repeat=dimension))
             directions.remove((0,) * dimension)
             return directions
-        else:
-            raise ValueError(
-                "The direction_norm option must be 'L2' or 'Linf', "
-                "but received %s" % config.direction_norm
-            )
 
     def _check_valid_neighbor(self, neighbor):
         """Function that checks if a given neighbor is valid.
@@ -371,91 +352,72 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         """
         if neighbor in self.explored_point_set:
             return False
-        if all(
+        return all(
             external_var_value >= external_var_info.LB
             and external_var_value <= external_var_info.UB
             for external_var_value, external_var_info in zip(
                 neighbor, self.working_model_util_block.external_var_info_list
             )
-        ):
-            return True
-        else:
-            return False
-
-    # def neighbor_search(self, config):
-    #     """Function that evaluates a group of given points and returns the best
-
-    #     Parameters
-    #     ----------
-    #     config : ConfigBlock
-    #         GDPopt configuration block
-    #     """
-    #     locally_optimal = True
-    #     best_neighbor = None
-    #     self.best_direction = None  # reset best direction
-    #     for direction in self.directions:
-    #         neighbor = tuple(map(sum, zip(self.current_point, direction)))
-    #         if self._check_valid_neighbor(neighbor):
-    #             primal_improved = self._solve_GDP_subproblem(
-    #                 neighbor, 'Neighbor search', config
-    #             )
-    #             if primal_improved:
-    #                 locally_optimal = False
-    #                 best_neighbor = neighbor
-    #                 self.best_direction = direction
-    #     if not locally_optimal:
-    #         self.current_point = best_neighbor
-    #     return locally_optimal
+        )
 
     def neighbor_search(self, config):
-        """Function that evaluates a group of given points and returns the best.
+        """Function that evaluates a group of given points and returns the best
 
         Parameters
         ----------
         config : ConfigBlock
-            GDPopt configuration block.
+            GDPopt configuration block
         """
         locally_optimal = True
         best_neighbor = None
-        self.best_direction = None  # Reset best direction
-        fmin = float('inf')  # Initialize fmin (best objective value)
-        best_dist = 0  # Initialize best distance
-        abs_tol = 1e-5 # Define a tolerance for close objective values (adjust if needed)
+        self.best_direction = None  # reset best direction
+        fmin = float('inf')  # Initialize the best objective value
+        best_dist = 0  # Initialize the best distance
+        abs_tol = (
+            config.integer_tolerance
+        )  # Use integer_tolerance for objective comparison
 
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
-            neighbor = tuple(map(sum, zip(self.current_point, direction)))  # Generate neighbor
-            if self._check_valid_neighbor(neighbor):  # Check if the neighbor is valid
+            # Generate a neighbor point by applying the direction to the current point
+            neighbor = tuple(map(sum, zip(self.current_point, direction)))
+
+            # Check if the neighbor is valid
+            if self._check_valid_neighbor(neighbor):
                 # Solve the subproblem for this neighbor
                 primal_improved, primal_bound = self._solve_GDP_subproblem(
                     neighbor, 'Neighbor search', config
                 )
-                if primal_improved:  # If the neighbor improves the objective
+
+                if primal_improved:
                     locally_optimal = False
 
-                    # --- Tiebreaker Logic Begins ---
-                    # Check if the objective value of the neighbor is very close to the current best
+                    # --- Tiebreaker Logic ---
                     if abs(fmin - primal_bound) < abs_tol:
-                        # Calculate the distance from the current point to this neighbor
-                        dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))  # Euclidean distance
-                        # If the neighbor is further than the best so far, update best neighbor
-                        if dist > best_dist:  # Tiebreaker: Choose the neighbor that is farther away
+                        # Calculate the Euclidean distance from the current point
+                        dist = sum(
+                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
+                        )
+
+                        # Update the best neighbor if this one is farther away
+                        if dist > best_dist:
                             best_neighbor = neighbor
                             self.best_direction = direction
-                            best_dist = dist  # Update the best distance to this neighbor
-                    # --- Tiebreaker Logic Ends ---
-
+                            best_dist = dist  # Update the best distance
                     else:
-                        # Standard improvement logic: update best neighbor based on objective value
-                        fmin = primal_bound  # Update fmin with the new best objective value
-                        best_neighbor = neighbor  # Update best neighbor
-                        self.best_direction = direction  # Update best direction
-                        # Update best distance since this neighbor has a better objective value
-                        best_dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
-                        
+                        # Standard improvement logic: update if the objective is better
+                        fmin = primal_bound  # Update the best objective value
+                        best_neighbor = neighbor  # Update the best neighbor
+                        self.best_direction = direction  # Update the best direction
+                        best_dist = sum(
+                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
+                        )
+                    # --- End of Tiebreaker Logic ---
+
+        # Move to the best neighbor if an improvement was found
         if not locally_optimal:
-            # If an improvement was found, move to the best neighbor
             self.current_point = best_neighbor
+
         return locally_optimal
 
     def line_search(self, config):
@@ -517,7 +479,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 if self.objective_sense == minimize
                 else subproblem_result.problem.lower_bound
             )
-            # print(subproblem_result.problem.upper_bound)
             primal_improved = self._update_bounds_after_solve(
                 search_type,
                 primal=primal_bound,
@@ -543,7 +504,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 'External Variables',
                 'Lower Bound',
                 'Upper Bound',
-                ' Gap ',
+                'Gap',
                 'Time(s)',
             )
         )
