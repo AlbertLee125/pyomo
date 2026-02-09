@@ -113,7 +113,7 @@ def _add_nlp_solve_configs(CONFIG, default_nlp_init_method):
     # subproblems.
     CONFIG.declare(
         "integer_tolerance",
-        ConfigValue(default=1e-5, description="Tolerance on integral values."),
+        ConfigValue(default=1e-6, description="Tolerance on integral values."),
     )
     CONFIG.declare(
         "constraint_tolerance",
@@ -526,7 +526,7 @@ def _add_tolerance_configs(CONFIG):
     CONFIG.declare(
         "bound_tolerance",
         ConfigValue(
-            default=1e-6,
+            default=1e-7,
             domain=NonNegativeFloat,
             description="Tolerance for bound convergence.",
         ),
@@ -566,5 +566,65 @@ def _add_ldsda_configs(CONFIG):
             The list of disjunctions to be reformulated into external variables.
             The disjunctions should be in the same order of provided starting point.
             """,
+        ),
+    )
+
+def _add_ldbd_configs(CONFIG):
+    CONFIG.declare(
+        "direction_norm",
+        ConfigValue(
+            default='L2',
+            domain=In(['L2', 'Linf']),
+            description="The norm to use for the search direction",
+        ),
+    )
+    CONFIG.declare(
+        "starting_point",
+        ConfigValue(default=None, description="The value list of external variables."),
+    )
+    CONFIG.declare(
+        "logical_constraint_list",
+        ConfigValue(
+            default=None,
+            domain=ComponentDataSet(LogicalConstraint),
+            description="""
+            The list of logical constraints to be reformulated into external variables.
+            The logical constraints should be in the same order of provided starting point.
+            The provided logical constraints should be ExactlyExpressions.""",
+        ),
+    )
+    CONFIG.declare(
+        "disjunction_list",
+        ConfigValue(
+            default=None,
+            domain=ComponentDataSet(Disjunction),
+            description="""
+            The list of disjunctions to be reformulated into external variables.
+            The disjunctions should be in the same order of provided starting point.
+            """,
+        ),
+    )
+    CONFIG.declare('infinity_output', 
+            ConfigValue(
+                default=1e8,
+                domain=float,
+                description="Value to use for infeasible points instead of infinity."
+            ),
+    )
+
+    CONFIG.declare(
+        "separation_solver",
+        ConfigValue(
+            default="gurobi",
+            description=(
+                "LP solver to use for the LD-BD cut refinement (separation LP)."
+            ),
+        ),
+    )
+    CONFIG.declare(
+        "separation_solver_args",
+        ConfigBlock(
+            description="Keyword arguments for the separation LP solver.",
+            implicit=True,
         ),
     )
