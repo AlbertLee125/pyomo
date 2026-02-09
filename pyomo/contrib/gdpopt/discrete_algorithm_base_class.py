@@ -47,6 +47,7 @@ class DiscreteDataManager:
     external_var_info_list : list
         External variable descriptors (e.g., bounds) used for point validation.
     """
+
     def __init__(self, external_var_info_list=None):
         """Create a new data manager.
 
@@ -97,7 +98,7 @@ class DiscreteDataManager:
             "feasible": feasible,
             "objective": objective,
             "source": source,
-            "iteration_found": iteration_found
+            "iteration_found": iteration_found,
         }
 
     def is_visited(self, point: tuple[int, ...]) -> bool:
@@ -164,12 +165,12 @@ class DiscreteDataManager:
         """
         if not self.external_var_info_list:
             return True
-            
+
         return all(
             info.LB <= val <= info.UB
             for val, info in zip(point, self.external_var_info_list)
         )
-    
+
     def get_best_solution(self) -> tuple[tuple[int, ...] | None, float | None]:
         """Return the best feasible point found so far.
 
@@ -181,8 +182,8 @@ class DiscreteDataManager:
         """
         # 筛选出 feasible 为 True 的点
         feasible_candidates = {
-            pt: data["objective"] 
-            for pt, data in self.point_info.items() 
+            pt: data["objective"]
+            for pt, data in self.point_info.items()
             if data["feasible"]
         }
 
@@ -204,6 +205,7 @@ ExternalVarInfo = namedtuple(
         'LB',  # lower bound on external variable
     ],
 )
+
 
 class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
     """Base class for GDPopt discrete algorithms.
@@ -232,7 +234,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         """
         super().__init__(**kwds)
         self.data_manager = DiscreteDataManager()
-        
+
     def _get_external_information(self, util_block, config):
         """Extract external-variable metadata from the working model.
 
@@ -262,7 +264,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         model = util_block.parent_block()
         reformulation_summary = []
         # Identify the variables that can be reformulated by performing a loop over logical constraints
-        
+
         if config.logical_constraint_list is not None:
             for c in util_block.config_logical_constraint_list:
                 if not isinstance(c.body, ExactlyExpression):
@@ -352,8 +354,8 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         ):
             for idx, boolean_var in enumerate(external_var_info.Boolean_vars):
                 # external_variable_value is 1-based (usually)
-                is_active = (idx == external_variable_value - 1)
-                
+                is_active = idx == external_variable_value - 1
+
                 boolean_var.fix(is_active)
                 if boolean_var.get_associated_binary() is not None:
                     boolean_var.get_associated_binary().fix(1 if is_active else 0)
@@ -403,7 +405,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
         # 2. Fix the model to this point
         self._fix_disjunctions_with_external_var(point)
-        
+
         # 3. Solve the subproblem (Relies on implementation in child class)
         primal_improved, primal_bound = self._solve_GDP_subproblem(
             point, search_type, config
@@ -467,9 +469,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                     TransformationFactory('contrib.detect_fixed_vars').apply_to(
                         subproblem
                     )
-                    TransformationFactory(
-                        'contrib.propagate_fixed_vars'
-                    ).apply_to(subproblem)
+                    TransformationFactory('contrib.propagate_fixed_vars').apply_to(
+                        subproblem
+                    )
                     TransformationFactory(
                         'contrib.deactivate_trivial_constraints'
                     ).apply_to(subproblem, tmp=False, ignore_infeasible=False)
@@ -489,11 +491,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             primal_bound = value(obj)
 
             primal_improved = self._handle_subproblem_result(
-                result,
-                subproblem,
-                external_var_value,
-                config,
-                search_type,
+                result, subproblem, external_var_value, config, search_type
             )
 
         return primal_improved, primal_bound
@@ -550,7 +548,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         if not self.data_manager.is_valid_point(neighbor):
             return False
         return True
-    
+
     def _generate_neighbors(self, current_point, config):
         """Generate valid, unvisited neighbors from a current point.
 
@@ -568,16 +566,18 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         """
         directions = self._get_directions(self.number_of_external_variables, config)
         valid_neighbors = []
-        
+
         for direction in directions:
             neighbor = tuple(map(sum, zip(current_point, direction)))
-            
+
             # Use DataManager to check bounds and visited status
-            if self.data_manager.is_valid_point(neighbor) and not self.data_manager.is_visited(neighbor):
+            if self.data_manager.is_valid_point(
+                neighbor
+            ) and not self.data_manager.is_visited(neighbor):
                 valid_neighbors.append((neighbor, direction))
-                
+
         return valid_neighbors
-    
+
     def _handle_subproblem_result(
         self, subproblem_result, subproblem, external_var_value, config, search_type
     ):

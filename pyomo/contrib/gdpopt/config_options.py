@@ -569,6 +569,7 @@ def _add_ldsda_configs(CONFIG):
         ),
     )
 
+
 def _add_ldbd_configs(CONFIG):
     CONFIG.declare(
         "direction_norm",
@@ -604,12 +605,13 @@ def _add_ldbd_configs(CONFIG):
             """,
         ),
     )
-    CONFIG.declare('infinity_output', 
-            ConfigValue(
-                default=1e8,
-                domain=float,
-                description="Value to use for infeasible points instead of infinity."
-            ),
+    CONFIG.declare(
+        'infinity_output',
+        ConfigValue(
+            default=1e8,
+            domain=float,
+            description="Value to use for infeasible points instead of infinity.",
+        ),
     )
 
     CONFIG.declare(
@@ -624,7 +626,6 @@ def _add_ldbd_configs(CONFIG):
     CONFIG.declare(
         "separation_solver_args",
         ConfigBlock(
-            description="Keyword arguments for the separation LP solver.",
-            implicit=True,
+            description="Keyword arguments for the separation LP solver.", implicit=True
         ),
     )

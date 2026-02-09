@@ -82,10 +82,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
         # External variable bounds are taken from external_var_info_list.
         s.data_manager.set_external_info(
-            [
-                ExternalVarInfo(1, [], 3, 1),
-                ExternalVarInfo(1, [], 10, 2),
-            ]
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 10, 2)]
         )
 
         m = s._build_master(s.config)
@@ -120,10 +117,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         # Setup data manager with external variable info
         s.data_manager.set_external_info(
-            [
-                ExternalVarInfo(1, [], 3, 1),
-                ExternalVarInfo(1, [], 10, 2),
-            ]
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 10, 2)]
         )
 
         # Build the master model
@@ -217,10 +211,14 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         results.solver.termination_condition = TerminationCondition.optimal
         mock_solver.solve.return_value = results
 
-        with mock.patch(
-            "pyomo.contrib.gdpopt.ldbd.get_main_elapsed_time", return_value=mock_elapsed
-        ), mock.patch(
-            "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+        with (
+            mock.patch(
+                "pyomo.contrib.gdpopt.ldbd.get_main_elapsed_time",
+                return_value=mock_elapsed,
+            ),
+            mock.patch(
+                "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+            ),
         ):
 
             s._solve_master(s.config)
@@ -232,10 +230,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_neighbor_search_feasible_anchor_evaluates_linf_neighborhood(self):
         s = GDP_LDBD_Solver()
         s.data_manager.set_external_info(
-            [
-                ExternalVarInfo(1, [], 3, 1),
-                ExternalVarInfo(1, [], 3, 1),
-            ]
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
         s.number_of_external_variables = 2
         s.config.direction_norm = "Linf"
@@ -273,10 +268,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_neighbor_search_infeasible_anchor_skips_neighbors(self):
         s = GDP_LDBD_Solver()
         s.data_manager.set_external_info(
-            [
-                ExternalVarInfo(1, [], 3, 1),
-                ExternalVarInfo(1, [], 3, 1),
-            ]
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
         s.number_of_external_variables = 2
         s.config.direction_norm = "Linf"
@@ -342,10 +334,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_refine_cuts_adds_and_updates_master_constraints(self):
         s = GDP_LDBD_Solver()
         s.data_manager.set_external_info(
-            [
-                ExternalVarInfo(1, [], 3, 1),
-                ExternalVarInfo(1, [], 3, 1),
-            ]
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
         s.number_of_external_variables = 2
         master = s._build_master(s.config)
@@ -683,10 +672,13 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
         mock_solver.solve.side_effect = solve_side_effect
 
-        with mock.patch(
-            "pyomo.contrib.gdpopt.ldbd.get_main_elapsed_time", return_value=120.0
-        ), mock.patch(
-            "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+        with (
+            mock.patch(
+                "pyomo.contrib.gdpopt.ldbd.get_main_elapsed_time", return_value=120.0
+            ),
+            mock.patch(
+                "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+            ),
         ):
             s._solve_separation_lp((1,), s.config)
 
@@ -716,8 +708,11 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
         mock_solver.solve.side_effect = solve_side_effect
 
-        with mock.patch.object(test_logger, "debug") as debug_mock, mock.patch(
-            "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+        with (
+            mock.patch.object(test_logger, "debug") as debug_mock,
+            mock.patch(
+                "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+            ),
         ):
             p_vals, alpha_val = s._solve_separation_lp((1,), s.config)
 
