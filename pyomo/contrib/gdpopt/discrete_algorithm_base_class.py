@@ -159,8 +159,15 @@ class DiscreteDataManager:
             for val, info in zip(point, self.external_var_info_list)
         )
 
-    def get_best_solution(self) -> tuple[tuple[int, ...] | None, float | None]:
+    def get_best_solution(
+        self, sense=None
+    ) -> tuple[tuple[int, ...] | None, float | None]:
         """Return the best feasible point found so far.
+
+        Parameters
+        ----------
+        sense : {minimize, maximize}, optional
+            Objective sense used to determine "best". Defaults to minimize.
 
         Returns
         -------
@@ -168,7 +175,11 @@ class DiscreteDataManager:
             ``(best_point, best_objective)`` if any feasible point exists;
             otherwise ``(None, None)``.
         """
-        # 筛选出 feasible 为 True 的点
+        from pyomo.core import minimize as _minimize
+
+        if sense is None:
+            sense = _minimize
+
         feasible_candidates = {
             pt: data["objective"]
             for pt, data in self.point_info.items()
@@ -178,7 +189,10 @@ class DiscreteDataManager:
         if not feasible_candidates:
             return None, None
 
-        best_point = min(feasible_candidates, key=feasible_candidates.get)
+        if sense == _minimize:
+            best_point = min(feasible_candidates, key=feasible_candidates.get)
+        else:
+            best_point = max(feasible_candidates, key=feasible_candidates.get)
         return best_point, feasible_candidates[best_point]
 
 

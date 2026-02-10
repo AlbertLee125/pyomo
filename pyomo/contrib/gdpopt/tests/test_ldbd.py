@@ -33,6 +33,8 @@ from pyomo.environ import (
     TransformationFactory,
     ConcreteModel,
     Objective,
+    minimize,
+    maximize,
 )
 from pyomo.contrib.gdpopt.tests.four_stage_dynamic_model import build_model
 from pyomo.gdp import Disjunct, Disjunction
@@ -50,11 +52,10 @@ class TestGDPoptLDBD(unittest.TestCase):
             )
         ),
         "gams solver not available",
-    )
-    def test_solve_four_stage_dynamic_model(self):
+    ) 
+    def test_solve_four_stage_dynamic_model_minimize(self):
 
         model = build_model(mode_transfer=True)
-
         # Discretize the model using dae.collocation
         discretizer = TransformationFactory("dae.collocation")
         discretizer.apply_to(model, nfe=10, ncp=3, scheme="LAGRANGE-RADAU")
@@ -91,6 +92,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_build_master_creates_vars_and_registry(self):
         s = GDP_LDBD_Solver()
 
+        # Set up objective_sense (required for master objective)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         # External variable bounds are taken from external_var_info_list.
         s.data_manager.set_external_info(
             [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 10, 2)]
@@ -126,6 +131,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_solve_master_extracts_point_and_lb(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for master objective)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         # Setup data manager with external variable info
         s.data_manager.set_external_info(
             [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 10, 2)]
@@ -175,6 +184,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_solve_master_non_convergence(self):
         """Unittest for _solve_master when the solver returns infeasible."""
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for master objective)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.data_manager.set_external_info([ExternalVarInfo(1, [], 1, 0)])
         s._build_master(s.config)  # make sure master is built
 
@@ -195,6 +208,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
     def test_solve_master_gams_time_limit_expired(self):
         """Unittest for _solve_master when GAMS time limit is expired."""
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for master objective)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.data_manager.set_external_info([ExternalVarInfo(1, [], 1, 0)])
         s._build_master(s.config)
 
@@ -302,6 +319,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_solve_separation_lp_builds_and_solves_lp(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for separation LP constraints)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.number_of_external_variables = 2
         # Populate D^k with a few points (including an infeasible penalty point)
         s.data_manager.add(
@@ -344,6 +365,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_refine_cuts_adds_and_updates_master_constraints(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for master objective and cuts)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.data_manager.set_external_info(
             [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
@@ -413,6 +438,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         solve_point_mock = mock.MagicMock(return_value=(False, 5.0))
         neighbor_search_mock = mock.MagicMock()
@@ -460,6 +486,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         def solve_point_side_effect(point, search_type, config):
             s.data_manager.add(
@@ -519,6 +546,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         def solve_point_side_effect(point, search_type, config):
             s.data_manager.add(
@@ -595,6 +623,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         def solve_point_side_effect(point, search_type, config):
             s.data_manager.add(
@@ -662,6 +691,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_solve_separation_lp_gams_time_limit_sets_reslim(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for separation LP)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.number_of_external_variables = 1
         s.config.separation_solver = "gams"
         s.config.time_limit = 100
@@ -698,6 +731,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_solve_separation_lp_nonconvergence_returns_none_and_logs(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for separation LP)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.number_of_external_variables = 1
         s.config.separation_solver = "mock"
         test_logger = logging.getLogger("pyomo.contrib.gdpopt.tests.test_ldbd")
@@ -733,6 +770,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
     def test_refine_cuts_skips_anchor_when_separation_lp_returns_none(self):
         s = GDP_LDBD_Solver()
+        # Set up objective_sense (required for master and cuts)
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = minimize
+
         s.data_manager.set_external_info([ExternalVarInfo(1, [], 3, 1)])
         s.number_of_external_variables = 1
         master = s._build_master(s.config)
@@ -772,6 +813,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         # Disable termination checks so the loop runs until the explicit UB-LB check
         with mock.patch.object(s, "any_termination_criterion_met", return_value=False):
@@ -895,6 +937,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.pyomo_results = mock.MagicMock()
         s.pyomo_results.solver = mock.MagicMock()
         s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = minimize
 
         def solve_point_side_effect(point, search_type, config):
             s.data_manager.add(
@@ -957,6 +1000,184 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
 
         # Verify that current_point was updated to best_point (2,) instead of
         # the repeat anchor (1,) since best_obj (5.0) < next_point_obj (10.0)
+        self.assertEqual(s.current_point, (2,))
+        self.assertIn((2,), s._path)
+
+    def test_solve_separation_lp_with_maximize_sense(self):
+        """Test separation LP construction for maximization problems.
+
+        Covers lines 501 (lhs_expr >= rhs constraint) and 510 (minimize objective).
+        """
+        s = GDP_LDBD_Solver()
+        # Set up objective_sense for maximization
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = maximize
+
+        s.number_of_external_variables = 2
+        s.data_manager.add(
+            (1, 1), feasible=True, objective=10.0, source="t", iteration_found=0
+        )
+        s.data_manager.add(
+            (2, 2), feasible=True, objective=8.0, source="t", iteration_found=0
+        )
+
+        anchor = (2, 2)
+
+        mock_solver = mock.MagicMock()
+
+        def solve_side_effect(model, **kwargs):
+            # Verify that for maximization:
+            # - Constraints are >= (overestimator)
+            # - Objective sense is minimize
+            self.assertEqual(model.obj.sense, minimize)
+            # Check that constraints use >= by examining one constraint
+            for idx in model.cuts:
+                con = model.cuts[idx]
+                # For >= constraints, lower should be set
+                self.assertIsNotNone(con.lower)
+
+            model.p[0].value = 1.0
+            model.p[1].value = 0.5
+            model.alpha.value = 2.0
+            results = mock.MagicMock()
+            results.solver.termination_condition = TerminationCondition.optimal
+            return results
+
+        mock_solver.solve.side_effect = solve_side_effect
+
+        with mock.patch(
+            "pyomo.contrib.gdpopt.ldbd.SolverFactory", return_value=mock_solver
+        ):
+            p_vals, alpha_val = s._solve_separation_lp(anchor, s.config)
+
+        self.assertEqual(p_vals, (1.0, 0.5))
+        self.assertEqual(alpha_val, 2.0)
+        mock_solver.solve.assert_called_once()
+
+    def test_refine_cuts_with_maximize_sense(self):
+        """Test refine_cuts generates z <= ... cuts for maximization.
+
+        Covers line 580 (expr = master.z <= cut_rhs).
+        """
+        s = GDP_LDBD_Solver()
+        # Set up objective_sense for maximization
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.problem.sense = maximize
+
+        s.data_manager.set_external_info(
+            [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
+        )
+        s.number_of_external_variables = 2
+        master = s._build_master(s.config)
+
+        # Master objective should be maximize for maximization problems
+        self.assertEqual(master.obj.sense, maximize)
+
+        s._anchors = [(1, 1)]
+        s.data_manager.add(
+            (1, 1), feasible=True, objective=10.0, source="t", iteration_found=0
+        )
+
+        def sep_lp_mock(anchor, config):
+            return (1.0, 2.0), 3.0
+
+        sep_mock = mock.MagicMock(side_effect=sep_lp_mock)
+        with mock.patch.object(s, "_solve_separation_lp", sep_mock):
+            s.refine_cuts(s.config)
+
+        self.assertEqual(len(master.refined_cuts), 1)
+        # Verify the cut is z <= ... (upper bound constraint)
+        cut = master.refined_cuts[1]
+        self.assertIsNotNone(cut.upper)  # z <= ... means upper bound is set
+
+    def test_solve_gdp_updates_next_point_for_maximize_sense(self):
+        """Test that when master returns a repeat anchor with a worse objective
+        for maximization, next_point is updated to best_point.
+
+        Covers line 254 (use_best = best_obj > next_point_obj for maximize).
+        """
+        m = ConcreteModel()
+        m.x = Var(bounds=(0, 10))
+        m.obj = Objective(expr=-m.x, sense=maximize)  # Maximization problem
+        m.d1 = Disjunct()
+        m.d1.c = Constraint(expr=m.x >= 1)
+        m.d2 = Disjunct()
+        m.d2.c = Constraint(expr=m.x <= 0)
+        m.disj = Disjunction(expr=[m.d1, m.d2])
+
+        s = GDP_LDBD_Solver()
+        s.config.starting_point = (1,)
+        s.config.disjunction_list = [m.disj]
+        s.config.direction_norm = "Linf"
+        s.timing.main_timer_start_time = 0.0
+
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.solver = mock.MagicMock()
+        s.pyomo_results.solver.termination_condition = None
+        s.pyomo_results.problem.sense = maximize  # Maximization!
+
+        def solve_point_side_effect(point, search_type, config):
+            s.data_manager.add(
+                tuple(point),
+                feasible=True,
+                objective=5.0,  # Worse for maximization
+                source=str(search_type),
+                iteration_found=0,
+            )
+            return False, 5.0
+
+        solve_point_mock = mock.MagicMock(side_effect=solve_point_side_effect)
+        neighbor_search_mock = mock.MagicMock(return_value=True)
+        refine_mock = mock.MagicMock()
+
+        # Master returns (1,) which is already in anchors, but best_point (2,)
+        # has a better objective for maximization (10.0 > 5.0)
+        solve_master_mock = mock.MagicMock(return_value=(0.0, (1,)))
+        update_bounds_mock = mock.MagicMock()
+        log_state_mock = mock.MagicMock()
+
+        # Configure get_best_solution to return a point with a better objective
+        # for maximization (10.0 > 5.0)
+        s.data_manager.get_best_solution = mock.MagicMock(return_value=((2,), 10.0))
+
+        # Configure get_info to return a worse objective for the master's next_point
+        def get_info_side_effect(point):
+            if point == (1,):
+                return {"objective": 5.0, "source": "Anchor"}
+            elif point == (2,):
+                return {"objective": 10.0, "source": "Neighbor"}
+            return None
+
+        s.data_manager.get_info = mock.MagicMock(side_effect=get_info_side_effect)
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    s, "any_termination_criterion_met", side_effect=[False, True]
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_solve_discrete_point", solve_point_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "neighbor_search", neighbor_search_mock)
+            )
+            stack.enter_context(mock.patch.object(s, "refine_cuts", refine_mock))
+            stack.enter_context(
+                mock.patch.object(s, "_solve_master", solve_master_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_update_bounds_after_solve", update_bounds_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_log_current_state", log_state_mock)
+            )
+
+            s._solve_gdp(m, s.config)
+
+        # Verify that current_point was updated to best_point (2,) instead of
+        # the repeat anchor (1,) since best_obj (10.0) > next_point_obj (5.0)
+        # for maximization
         self.assertEqual(s.current_point, (2,))
         self.assertIn((2,), s._path)
 

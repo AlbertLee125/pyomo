@@ -226,7 +226,9 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             )
 
             # Update upper bound from the best feasible point seen so far.
-            best_point, best_obj = self.data_manager.get_best_solution()
+            best_point, best_obj = self.data_manager.get_best_solution(
+                sense=self.objective_sense
+            )
             if best_obj is not None:
                 self._update_bounds_after_solve(
                     "UB update",
@@ -245,8 +247,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                         # If the best known anchor has a strictly better objective
                         # than the repeated master point, use the anchor as the
                         # next point instead of repeating.
-                        if next_point_obj is not None and best_obj < next_point_obj:
-                            next_point = best_point
+                        if next_point_obj is not None:
+                            if self.objective_sense is minimize:
+                                use_best = best_obj < next_point_obj
+                            else:
+                                use_best = best_obj > next_point_obj
+                            if use_best:
+                                next_point = best_point
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
@@ -331,7 +338,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
         # Epigraph variable for the master objective.
         master.z = Var(domain=Reals)
-        master.obj = Objective(expr=master.z, sense=minimize)
+        master.obj = Objective(expr=master.z, sense=self.objective_sense)
 
         # Container for refined LD-BD cuts (updated in-place via registry).
         master.refined_cuts = ConstraintList()
@@ -454,8 +461,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
         For a fixed anchor point e^hat, solve:
 
+        For minimization:
             max_{p, alpha}   p^T e^hat + alpha
             s.t.             p^T e + alpha <= f*(e)   for all evaluated e in D^k
+
+        For maximization:
+            min_{p, alpha}   p^T e^hat + alpha
+            s.t.             p^T e + alpha >= f*(e)   for all evaluated e in D^k
 
         Returns
         -------
@@ -476,17 +488,26 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         sep.alpha = Var(domain=Reals)
         sep.cuts = ConstraintList()
 
+        # Build separation constraints based on objective sense
         for pt, info in point_info.items():
             pt = tuple(pt)
             rhs = float(info.get("objective"))
-            sep.cuts.add(
-                sum(sep.p[i] * pt[i] for i in range(master_dim)) + sep.alpha <= rhs
-            )
+            lhs_expr = sum(sep.p[i] * pt[i] for i in range(master_dim)) + sep.alpha
+            if self.objective_sense is minimize:
+                # Underestimator: p^T e + alpha <= f*(e)
+                sep.cuts.add(lhs_expr <= rhs)
+            else:
+                # Overestimator: p^T e + alpha >= f*(e)
+                sep.cuts.add(lhs_expr >= rhs)
 
-        sep.obj = Objective(
-            expr=sum(sep.p[i] * anchor_point[i] for i in range(master_dim)) + sep.alpha,
-            sense=maximize,
+        # Separation objective: maximize for minimization, minimize for maximization
+        sep_obj_expr = (
+            sum(sep.p[i] * anchor_point[i] for i in range(master_dim)) + sep.alpha
         )
+        if self.objective_sense is minimize:
+            sep.obj = Objective(expr=sep_obj_expr, sense=maximize)
+        else:
+            sep.obj = Objective(expr=sep_obj_expr, sense=minimize)
 
         lp_args = dict(getattr(config, "separation_solver_args", {}))
         if (
@@ -550,9 +571,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             if p_vals is None:
                 continue
 
-            expr = (
-                master.z >= sum(p_vals[i] * master.e[i] for i in master.e) + alpha_val
-            )
+            cut_rhs = sum(p_vals[i] * master.e[i] for i in master.e) + alpha_val
+            if self.objective_sense is minimize:
+                # Underestimator: z >= p^T e + alpha
+                expr = master.z >= cut_rhs
+            else:
+                # Overestimator: z <= p^T e + alpha
+                expr = master.z <= cut_rhs
 
             if anchor in self._cut_indices:
                 cut_idx = self._cut_indices[anchor]
