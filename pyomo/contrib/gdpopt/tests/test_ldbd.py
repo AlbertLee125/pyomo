@@ -854,6 +854,112 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         self.assertEqual(s.LB, 5.0)
         self.assertTrue(fake_refine.called)
 
+    def test_solve_gdp_raises_when_starting_point_is_none(self):
+        """Test that _solve_gdp raises ValueError when starting_point is None."""
+        m = ConcreteModel()
+        m.x = Var(bounds=(0, 10))
+        m.obj = Objective(expr=m.x)
+        m.d1 = Disjunct()
+        m.d1.c = Constraint(expr=m.x >= 1)
+        m.d2 = Disjunct()
+        m.d2.c = Constraint(expr=m.x <= 0)
+        m.disj = Disjunction(expr=[m.d1, m.d2])
+
+        s = GDP_LDBD_Solver()
+        s.config.starting_point = None
+        s.config.disjunction_list = [m.disj]
+        s.config.direction_norm = "Linf"
+        s.timing.main_timer_start_time = 0.0
+
+        with pytest.raises(ValueError, match="LD-BD solver requires a starting point"):
+            s._solve_gdp(m, s.config)
+
+    def test_solve_gdp_updates_next_point_when_best_obj_is_better(self):
+        """Test that when master returns a repeat anchor with a worse objective,
+        next_point is updated to the best_point (line 249 logic)."""
+        m = ConcreteModel()
+        m.x = Var(bounds=(0, 10))
+        m.obj = Objective(expr=m.x)
+        m.d1 = Disjunct()
+        m.d1.c = Constraint(expr=m.x >= 1)
+        m.d2 = Disjunct()
+        m.d2.c = Constraint(expr=m.x <= 0)
+        m.disj = Disjunction(expr=[m.d1, m.d2])
+
+        s = GDP_LDBD_Solver()
+        s.config.starting_point = (1,)
+        s.config.disjunction_list = [m.disj]
+        s.config.direction_norm = "Linf"
+        s.timing.main_timer_start_time = 0.0
+
+        s.pyomo_results = mock.MagicMock()
+        s.pyomo_results.solver = mock.MagicMock()
+        s.pyomo_results.solver.termination_condition = None
+
+        def solve_point_side_effect(point, search_type, config):
+            s.data_manager.add(
+                tuple(point),
+                feasible=True,
+                objective=10.0,
+                source=str(search_type),
+                iteration_found=0,
+            )
+            return False, 10.0
+
+        solve_point_mock = mock.MagicMock(side_effect=solve_point_side_effect)
+        neighbor_search_mock = mock.MagicMock(return_value=True)
+        refine_mock = mock.MagicMock()
+
+        # Master returns (1,) which is already in anchors, but best_point (2,)
+        # has a better objective (5.0 < 10.0)
+        solve_master_mock = mock.MagicMock(return_value=(0.0, (1,)))
+        update_bounds_mock = mock.MagicMock()
+        log_state_mock = mock.MagicMock()
+
+        # Configure get_best_solution to return a point with a better objective
+        # than the next_point from master
+        s.data_manager.get_best_solution = mock.MagicMock(return_value=((2,), 5.0))
+
+        # Configure get_info to return a worse objective for the master's next_point
+        def get_info_side_effect(point):
+            if point == (1,):
+                return {"objective": 10.0, "source": "Anchor"}
+            elif point == (2,):
+                return {"objective": 5.0, "source": "Neighbor"}
+            return None
+
+        s.data_manager.get_info = mock.MagicMock(side_effect=get_info_side_effect)
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    s, "any_termination_criterion_met", side_effect=[False, True]
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_solve_discrete_point", solve_point_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "neighbor_search", neighbor_search_mock)
+            )
+            stack.enter_context(mock.patch.object(s, "refine_cuts", refine_mock))
+            stack.enter_context(
+                mock.patch.object(s, "_solve_master", solve_master_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_update_bounds_after_solve", update_bounds_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_log_current_state", log_state_mock)
+            )
+
+            s._solve_gdp(m, s.config)
+
+        # Verify that current_point was updated to best_point (2,) instead of
+        # the repeat anchor (1,) since best_obj (5.0) < next_point_obj (10.0)
+        self.assertEqual(s.current_point, (2,))
+        self.assertIn((2,), s._path)
+
 
 if __name__ == "__main__":
     unittest.main()
