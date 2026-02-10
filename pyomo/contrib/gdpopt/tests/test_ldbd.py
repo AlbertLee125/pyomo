@@ -1,3 +1,15 @@
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright (c) 2008-2025
+#  National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
+
 """Unit tests for the GDPopt LD-BD solver.
 
 These tests focus on solver infrastructure pieces that do not require an
@@ -63,7 +75,7 @@ class TestGDPoptLDBD(unittest.TestCase):
                 model,
                 direction_norm=direction_norm,
                 minlp_solver="gams",
-                minlp_solver_args=dict(solver="ipopth"),
+                minlp_solver_args=dict(solver="ipopt"),
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,

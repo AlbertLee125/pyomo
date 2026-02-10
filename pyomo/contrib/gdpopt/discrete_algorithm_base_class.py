@@ -393,9 +393,6 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                     pass
             return False, cached_obj
 
-        # 2. Fix the model to this point
-        self._fix_disjunctions_with_external_var(point)
-
         # 3. Solve the subproblem (Relies on implementation in child class)
         primal_improved, primal_bound = self._solve_GDP_subproblem(
             point, search_type, config

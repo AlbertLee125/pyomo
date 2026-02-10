@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2022
+#  Copyright (c) 2008-2025
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -30,7 +30,6 @@ from pyomo.contrib.gdpopt.config_options import (
 )
 from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_values
 from pyomo.contrib.gdpopt.util import get_main_elapsed_time
-from pyomo.contrib.satsolver.satsolver import satisfiable
 from pyomo.core import minimize, Suffix, TransformationFactory, maximize
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
@@ -52,7 +51,7 @@ tabulate, tabulate_available = attempt_import("tabulate")
 
 @SolverFactory.register(
     "gdpopt.ldbd",
-    doc="The LD-BD (Logic-based Discrete Benders Decomposition solver)"
+    doc="The LD-BD (Logic-based Discrete Benders Decomposition solver) "
     "Generalized Disjunctive Programming (GDP) solver",
 )
 class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
@@ -138,11 +137,10 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             "{:>9}   {:>15}   {:>20}   {:>11.5f}   {:>11.5f}   {:>8.2%}   {:>7.2f}  {}"
         )
 
-        if config.citation_logger is not None:
-            self._log_citation(config.citation_logger)
         # Initialize current point to the starting point from config.
-        else:
+        if getattr(config, "starting_point", None) is None:
             raise ValueError("LD-BD solver requires a starting point in config.")
+        self.current_point = tuple(config.starting_point)
         logger.debug("Initial current point: %s", self.current_point)
 
         # Create utility block on the original model so that we will be able to
@@ -240,19 +238,15 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             # Step Five: Loop break in the paper. If the solution of the master problem is the same as one of the previously evaluated points, then we need to update the current point with the best solution from anchors
 
             if tuple(next_point) in self._anchors:
-                best_anchor, best_anchor_obj = self.data_manager.get_best_solution()
-                if best_anchor is not None and best_anchor_obj is not None:
+                if best_point is not None and best_obj is not None:
                     next_point_info = self.data_manager.get_info(tuple(next_point))
                     if next_point_info is not None:
                         next_point_obj = next_point_info.get("objective", None)
                         # If the best known anchor has a strictly better objective
                         # than the repeated master point, use the anchor as the
                         # next point instead of repeating.
-                        if (
-                            next_point_obj is not None
-                            and best_anchor_obj < next_point_obj
-                        ):
-                            next_point = best_anchor
+                        if next_point_obj is not None and best_obj < next_point_obj:
+                            next_point = best_point
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
