@@ -23,7 +23,6 @@ from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
 
 
-
 class DiscreteDataManager:
     """Manage explored points in a discrete search space.
 
@@ -250,7 +249,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             number of derived external variables.
         """
         util_block.external_var_info_list = []
-        
+
         reformulation_summary = []
         # Identify the variables that can be reformulated by performing a loop over logical constraints
 

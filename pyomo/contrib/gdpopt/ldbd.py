@@ -248,7 +248,10 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                         # If the best known anchor has a strictly better objective
                         # than the repeated master point, use the anchor as the
                         # next point instead of repeating.
-                        if next_point_obj is not None and best_anchor_obj < next_point_obj:
+                        if (
+                            next_point_obj is not None
+                            and best_anchor_obj < next_point_obj
+                        ):
                             next_point = best_anchor
 
             self.current_point = tuple(next_point)
