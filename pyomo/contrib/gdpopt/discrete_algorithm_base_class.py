@@ -196,8 +196,6 @@ class DiscreteDataManager:
         return best_point, feasible_candidates[best_point]
 
 
-# tabulate, tabulate_available = attempt_import('tabulate')
-# Data tuple for external variables.
 ExternalVarInfo = namedtuple(
     'ExternalVarInfo',
     [
@@ -319,15 +317,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         # have collected all sources of external variables).
         self.data_manager.set_external_info(util_block.external_var_info_list)
         config.logger.info("Reformulation Summary:")
-        config.logger.info(
-            # tabulate.tabulate(
-            #     reformulation_summary,
-            #     headers=["Ext Var Index", "LB", "UB", "Associated Boolean Vars"],
-            #     showindex="always",
-            #     tablefmt="simple_outline",
-            # )
-            "  Index | Ext Var | LB | UB | Associated Boolean Vars"
-        )
+        config.logger.info("  Index | Ext Var | LB | UB | Associated Boolean Vars")
         self.number_of_external_variables = sum(
             external_var_info.exactly_number
             for external_var_info in util_block.external_var_info_list

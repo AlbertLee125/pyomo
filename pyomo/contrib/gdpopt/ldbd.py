@@ -34,7 +34,6 @@ from pyomo.core import minimize, Suffix, TransformationFactory, maximize
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
 
-from pyomo.common.dependencies import attempt_import
 from pyomo.core.base import (
     Var,
     ConstraintList,
@@ -44,9 +43,6 @@ from pyomo.core.base import (
     ConcreteModel,
     Integers,
 )
-
-it, it_available = attempt_import("itertools")
-tabulate, tabulate_available = attempt_import("tabulate")
 
 
 @SolverFactory.register(

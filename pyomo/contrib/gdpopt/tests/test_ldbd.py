@@ -52,7 +52,7 @@ class TestGDPoptLDBD(unittest.TestCase):
             )
         ),
         "gams solver not available",
-    ) 
+    )
     def test_solve_four_stage_dynamic_model_minimize(self):
 
         model = build_model(mode_transfer=True)
