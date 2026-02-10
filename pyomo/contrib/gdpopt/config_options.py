@@ -113,7 +113,7 @@ def _add_nlp_solve_configs(CONFIG, default_nlp_init_method):
     # subproblems.
     CONFIG.declare(
         "integer_tolerance",
-        ConfigValue(default=1e-6, description="Tolerance on integral values."),
+        ConfigValue(default=1e-5, description="Tolerance on integral values."),
     )
     CONFIG.declare(
         "constraint_tolerance",
@@ -526,7 +526,7 @@ def _add_tolerance_configs(CONFIG):
     CONFIG.declare(
         "bound_tolerance",
         ConfigValue(
-            default=1e-7,
+            default=1e-6,
             domain=NonNegativeFloat,
             description="Tolerance for bound convergence.",
         ),
@@ -609,7 +609,7 @@ def _add_ldbd_configs(CONFIG):
         'infinity_output',
         ConfigValue(
             default=1e8,
-            domain=float,
+            domain=NonNegativeFloat,
             description="Value to use for infeasible points instead of infinity.",
         ),
     )

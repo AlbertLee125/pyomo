@@ -12,7 +12,6 @@ from contextlib import ExitStack
 from pyomo.contrib.gdpopt.ldbd import GDP_LDBD_Solver
 from pyomo.contrib.gdpopt.discrete_algorithm_base_class import ExternalVarInfo
 from pyomo.core.base import ConstraintList
-from unittest.mock import MagicMock, patch
 
 from pyomo.environ import (
     SolverFactory,
@@ -60,7 +59,7 @@ class TestGDPoptLDBD(unittest.TestCase):
                 dxdt.setub(300)
 
         for direction_norm in ["L2", "Linf"]:
-            result = SolverFactory("gdpopt.ldbd").solve(
+            SolverFactory("gdpopt.ldbd").solve(
                 model,
                 direction_norm=direction_norm,
                 minlp_solver="gams",

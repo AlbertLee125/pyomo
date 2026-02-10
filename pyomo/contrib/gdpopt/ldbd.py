@@ -9,11 +9,8 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from collections import namedtuple
-import traceback
-from pyomo.common.config import document_kwargs_from_configdict, ConfigValue
-from pyomo.common.errors import InfeasibleConstraintException
-from pyomo.contrib.fbbt.fbbt import fbbt
+
+from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
 from pyomo.contrib.gdpopt.discrete_algorithm_base_class import _GDPoptDiscreteAlgorithm
 from pyomo.contrib.gdpopt.create_oa_subproblems import (
@@ -32,23 +29,20 @@ from pyomo.contrib.gdpopt.config_options import (
     _add_nlp_solve_configs,
 )
 from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_values
-from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
+from pyomo.contrib.gdpopt.util import get_main_elapsed_time
 from pyomo.contrib.satsolver.satsolver import satisfiable
 from pyomo.core import minimize, Suffix, TransformationFactory, maximize
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
-from pyomo.core.expr.logical_expr import ExactlyExpression
+
 from pyomo.common.dependencies import attempt_import
 from pyomo.core.base import (
     Var,
-    Constraint,
-    NonNegativeReals,
     ConstraintList,
     Objective,
     Reals,
     value,
     ConcreteModel,
-    NonNegativeIntegers,
     Integers,
 )
 
@@ -116,8 +110,12 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         config : ConfigBlock
             GDPopt configuration block providing the logger.
         """
-        config.logger.info("\n" + """TODO: Add citation for LD-BD here.
-        """.strip())
+        config.logger.info(
+            "\n"
+            + """Liñán, D. A.; Ricardez‐Sandoval, L. A. A Benders Decomposition Framework for the Optimization of Disjunctive Superstructures with Ordered Discrete Decisions. AIChE Journal 2023, 69 (5), e18008. https://doi.org/10.1002/aic.18008.
+
+        """.strip()
+        )
 
     def _solve_gdp(self, model, config):
         """Solve the GDP model using the LD-BD algorithm.
@@ -140,7 +138,11 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             "{:>9}   {:>15}   {:>20}   {:>11.5f}   {:>11.5f}   {:>8.2%}   {:>7.2f}  {}"
         )
 
-        self.current_point = tuple(config.starting_point)
+        if config.citation_logger is not None:
+            self._log_citation(config.citation_logger)
+        # Initialize current point to the starting point from config.
+        else:
+            raise ValueError("LD-BD solver requires a starting point in config.")
         logger.debug("Initial current point: %s", self.current_point)
 
         # Create utility block on the original model so that we will be able to
@@ -240,11 +242,14 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             if tuple(next_point) in self._anchors:
                 best_anchor, best_anchor_obj = self.data_manager.get_best_solution()
                 if best_anchor is not None and best_anchor_obj is not None:
-                    next_point_obj = self.data_manager.get_info(tuple(next_point)).get(
-                        "objective", None
-                    )
-                    if next_point_obj is not None and next_point_obj < best_anchor_obj:
-                        self.current_point = tuple(best_anchor)
+                    next_point_info = self.data_manager.get_info(tuple(next_point))
+                    if next_point_info is not None:
+                        next_point_obj = next_point_info.get("objective", None)
+                        # If the best known anchor has a strictly better objective
+                        # than the repeated master point, use the anchor as the
+                        # next point instead of repeating.
+                        if next_point_obj is not None and best_anchor_obj < next_point_obj:
+                            next_point = best_anchor
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
@@ -396,7 +401,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         # correct direction for the objective sense).
         # In the LD-BD case, the master objective is a lower bound on the
         # original minimization objective.
-        # We cannot garantee that the master objective improves monotonically as we refine cuts,
+        # We cannot guarantee that the master objective improves monotonically as we refine cuts,
         self._update_bounds(dual=z_lb, force_update=True)
         next_point = tuple(int(round(value(master.e[i]))) for i in master.e)
         return z_lb, next_point
@@ -543,21 +548,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         for anchor in anchors:
             anchor = tuple(anchor)
 
-            # Only generate/refine cuts for *feasible* anchors.
-            # (Infeasible trial points may still appear in the anchor path/logs,
-            # but they should not be used as anchors for cut generation.)
-            # info = self.data_manager.get_info(anchor)
-            # if info is None:
-            #     continue
-            # if not bool(info.get('feasible', False)):
-            #     continue
-            # try:
-            #     if float(info.get('objective', float('inf'))) >= config.infinity_output:
-            #         continue
-            # except Exception:
-            #     # If objective is missing or non-numeric, be conservative.
-            #     continue
-
+            # Generate cuts for all the anchors, including infeasible points.
             p_vals, alpha_val = self._solve_separation_lp(anchor, config)
             if p_vals is None:
                 continue

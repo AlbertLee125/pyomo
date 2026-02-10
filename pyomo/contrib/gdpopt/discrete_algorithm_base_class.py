@@ -1,37 +1,27 @@
+#  ___________________________________________________________________________
+#
+#  Pyomo: Python Optimization Modeling Objects
+#  Copyright (c) 2008-2025
+#  National Technology and Engineering Solutions of Sandia, LLC
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+#  rights in this software.
+#  This software is distributed under the 3-clause BSD License.
+#  ___________________________________________________________________________
+
+
 from collections import namedtuple
 import itertools as it
-import traceback
-from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.common.errors import InfeasibleConstraintException
 from pyomo.contrib.fbbt.fbbt import fbbt
 
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
-
-from pyomo.contrib.gdpopt.create_oa_subproblems import (
-    add_util_block,
-    add_disjunction_list,
-    add_disjunct_list,
-    add_algebraic_variable_list,
-    add_boolean_variable_lists,
-    add_transformed_boolean_variable_list,
-)
-from pyomo.contrib.gdpopt.config_options import (
-    _add_nlp_solver_configs,
-    _add_ldsda_configs,
-    _add_mip_solver_configs,
-    _add_tolerance_configs,
-    _add_nlp_solve_configs,
-)
-from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_values
 from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
-from pyomo.contrib.satsolver.satsolver import satisfiable
-from pyomo.core import minimize, Suffix, TransformationFactory, Objective, value
+from pyomo.core import minimize, TransformationFactory, Objective, value
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
-from pyomo.common.dependencies import attempt_import
 
-from pyomo.common.collections import ComponentMap
 
 
 class DiscreteDataManager:
@@ -57,7 +47,6 @@ class DiscreteDataManager:
             External variable descriptors (e.g., a list of ``ExternalVarInfo``)
             used to validate candidate points.
         """
-        # 使用原生 dict 和 tuple 进行标注 (无需 import)
         self.point_info: dict[tuple[int, ...], dict[str, object]] = {}
         self.external_var_info_list = external_var_info_list
 
@@ -261,7 +250,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             number of derived external variables.
         """
         util_block.external_var_info_list = []
-        model = util_block.parent_block()
+        
         reformulation_summary = []
         # Identify the variables that can be reformulated by performing a loop over logical constraints
 
@@ -400,6 +389,8 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                         primal_improved=False,
                     )
                 except Exception:
+                    # Logging is best-effort only; failures here must not
+                    # interrupt the optimization algorithm.
                     pass
             return False, cached_obj
 
