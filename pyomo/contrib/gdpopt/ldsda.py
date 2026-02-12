@@ -137,7 +137,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             self.working_model_util_block.BigM = Suffix()
         self._log_header(logger)
         # Solve the initial point
-        _ = self._solve_GDP_subproblem(self.current_point, 'Initial point', config)
+        _, _ = self._solve_GDP_subproblem(self.current_point, 'Initial point', config)
 
         # Main loop
         locally_optimal = False
@@ -432,7 +432,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         while primal_improved:
             next_point = tuple(map(sum, zip(self.current_point, self.best_direction)))
             if self._check_valid_neighbor(next_point):
-                primal_improved = self._solve_GDP_subproblem(
+                primal_improved, _ = self._solve_GDP_subproblem(
                     next_point, 'Line search', config
                 )
                 if primal_improved:
