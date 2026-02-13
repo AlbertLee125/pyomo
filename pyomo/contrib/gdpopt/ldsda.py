@@ -456,34 +456,32 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     neighbor, 'Neighbor search', config
                 )
 
-                if primal_improved:
+                if primal_bound is None:
+                    continue
+
+                if primal_bound >= self.current_obj - config.bound_tolerance:
+                    continue
+
+                dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
+
+                # NOTE: only flip locally_optimal when we choose/update best_neighbor
+                if primal_bound < fmin - abs_tol:
+                    fmin = primal_bound
+                    best_neighbor = neighbor
+                    self.best_direction = direction
+                    best_dist = dist
+                    locally_optimal = False
+                elif abs(primal_bound - fmin) <= abs_tol and dist > best_dist:
+                    best_neighbor = neighbor
+                    self.best_direction = direction
+                    best_dist = dist
                     locally_optimal = False
 
-                    # --- Tiebreaker Logic ---
-                    if abs(fmin - primal_bound) < abs_tol:
-                        # Calculate the squared Euclidean distance from the current point
-                        dist = sum(
-                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
-                        )
-
-                        # Update the best neighbor if this one is farther away
-                        if dist > best_dist:
-                            best_neighbor = neighbor
-                            self.best_direction = direction
-                            best_dist = dist  # Update the best distance
-                    else:
-                        # Standard improvement logic: update if the objective is better
-                        fmin = primal_bound  # Update the best objective value
-                        best_neighbor = neighbor  # Update the best neighbor
-                        self.best_direction = direction  # Update the best direction
-                        best_dist = sum(
-                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
-                        )
-                    # --- End of Tiebreaker Logic ---
 
         # Move to the best neighbor if an improvement was found
         if not locally_optimal:
             self.current_point = best_neighbor
+            self.current_obj = fmin
 
         return locally_optimal
 
