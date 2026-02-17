@@ -176,7 +176,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         self._build_master(config)
 
         # Anchors are the *trial points* proposed by the master (including the
-        # initial point). Per ldbd.tex, cuts are refined for these anchors using
+        # initial point). Cuts are refined for these anchors using
         # all evaluated points in D^k as separation constraints.
         self._anchors = [tuple(self.current_point)]
         self._path = [tuple(self.current_point)]
