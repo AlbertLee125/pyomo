@@ -464,7 +464,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
 
                 dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
-                # NOTE: only flip locally_optimal when we choose/update best_neighbor
+                # If the neighbor is not better than current, we don't update best_neighbor and we don't flip locally_optimal to False.
                 if primal_bound < fmin - abs_tol:
                     fmin = primal_bound
                     best_neighbor = neighbor
