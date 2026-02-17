@@ -233,7 +233,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                     current_point=best_point,
                 )
 
-            # Step Five: Loop break in the paper. If the solution of the master problem is the same as one of the previously evaluated points, then we need to update the current point with the best solution from anchors
+            # Step Five: Loop break in the paper by Liñán, D. A. (2023). If the solution of the master problem is the same as one of the previously evaluated points, then we need to update the current point with the best solution from anchors
 
             if tuple(next_point) in self._anchors:
                 if best_point is not None and best_obj is not None:
@@ -453,7 +453,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
     def _solve_separation_lp(self, anchor_point, config):
         """Solve the LP separation problem for a given anchor point.
 
-        Implements Algorithm (LD-BD Optimality Cut Generation) in ldbd.tex.
+        Implements Algorithm (LD-BD Optimality Cut Generation).
 
         For a fixed anchor point e^hat, solve:
 
