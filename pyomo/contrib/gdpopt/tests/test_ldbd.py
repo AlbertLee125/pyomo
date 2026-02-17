@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2025
+#  Copyright (c) 2008-2026
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -54,7 +54,13 @@ class TestGDPoptLDBD(unittest.TestCase):
         "gams solver not available",
     )
     def test_solve_four_stage_dynamic_model_minimize(self):
+        '''
+        The testing model is from: 
+          Peng, Z.; Lee, A.; Neira, D. E. B. Addressing Discrete Dynamic Optimization via a Logic-Based Discrete-Steepest Descent Algorithm. arXiv September 14, 2024. https://doi.org/10.48550/arXiv.2409.09237.
 
+        '''
+
+        
         model = build_model(mode_transfer=True)
         # Discretize the model using dae.collocation
         discretizer = TransformationFactory("dae.collocation")
@@ -76,7 +82,7 @@ class TestGDPoptLDBD(unittest.TestCase):
                 model,
                 direction_norm=direction_norm,
                 minlp_solver="gams",
-                minlp_solver_args=dict(solver="ipopt"),
+                minlp_solver_args=dict(solver="ipopth"),
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
