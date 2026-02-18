@@ -42,6 +42,11 @@ class DiscreteDataManager:
         Mapping from an external-variable point to a metadata dictionary.
     external_var_info_list : list
         External variable descriptors (e.g., bounds) used for point validation.
+    solution_cache : dict[tuple[int, ...], dict[str, dict[str, object]]]
+        Optional cached variable values for previously evaluated points.
+        The payload is a dict (e.g., ``{"algebraic": {...}, "boolean": {...}}``)
+        whose inner keys are stable component identifiers (``ComponentUID``
+        string representations).
     """
 
     def __init__(self, external_var_info_list=None):
@@ -63,19 +68,46 @@ class DiscreteDataManager:
         self.solution_cache: dict[tuple[int, ...], dict[str, dict[str, object]]] = {}
 
     def store_solution(self, point: tuple[int, ...], solution):
-        """Store a cached solution for a point.
+        """Store a cached solution payload for an external-variable point.
 
         Parameters
         ----------
         point : tuple[int, ...]
             External-variable point.
         solution : dict
-            Solution payload (e.g., {'algebraic': {...}, 'boolean': {...}}).
+            Solution payload.
+
+            Expected format is a dict containing (some or all of) the keys:
+
+            - ``"algebraic"``: mapping from ``str(ComponentUID(var))`` to a
+              numeric value
+            - ``"boolean"``: mapping from ``str(ComponentUID(var))`` to a bool
+              (or a numeric 0/1)
+
+        Notes
+        -----
+        This cache is intentionally independent from Pyomo's ``SolverResults``
+        solution objects. GDPopt meta-solvers frequently return empty
+        ``results.solution`` containers, so caching provides a lightweight
+        way to recover a best-known assignment for transfer to the original
+        model.
         """
         self.solution_cache[tuple(point)] = solution
 
     def get_solution(self, point: tuple[int, ...]):
-        """Return cached solution payload for a point, if present."""
+        """Return cached solution payload for a point, if present.
+
+        Parameters
+        ----------
+        point : tuple[int, ...]
+            External-variable point.
+
+        Returns
+        -------
+        dict or None
+            The cached payload for ``point``, or ``None`` if no cache entry
+            exists.
+        """
         return self.solution_cache.get(tuple(point))
 
     def set_external_info(self, external_var_info_list):
@@ -265,14 +297,30 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         self.data_manager = DiscreteDataManager()
 
     def _cache_point_solution(self, point, util_block):
-        """Cache variable values for a feasible point.
+        """Cache variable values for a point.
 
-        This stores values keyed by stable component UIDs so they can be
-        replayed onto the original model without requiring a re-solve.
+        Parameters
+        ----------
+        point : iterable[int]
+            External-variable point.
+        util_block : Block
+            Utility block on the model instance whose values should be cached.
+            This is typically a cloned subproblem's util block.
 
-        The cache stores:
-        - algebraic variables: util_block.algebraic_variable_list
-        - boolean variables: util_block.boolean_variable_list
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Values are cached using stable identifiers (``ComponentUID`` string
+        representations) so that values can later be replayed onto the
+        *original* model's variable lists when updating the incumbent.
+
+        The cache currently includes:
+
+        - Algebraic variables from ``util_block.algebraic_variable_list``
+        - Boolean variables from ``util_block.boolean_variable_list``
         """
         point = tuple(point)
         algebraic = {
@@ -284,12 +332,28 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         self.data_manager.store_solution(point, {'algebraic': algebraic, 'boolean': boolean})
 
     def _load_incumbent_from_solution_cache(self, point, logger=None):
-        """Load incumbent buffers from a cached solution (if available).
+        """Load incumbent buffers from a cached solution payload.
+
+        Parameters
+        ----------
+        point : iterable[int]
+            External-variable point to load.
+        logger : logging.Logger, optional
+            Logger used for debug messages when no cached payload exists.
 
         Returns
         -------
         bool
-            True if the cache was found and incumbent buffers were updated.
+            ``True`` if a cached payload was found and incumbent buffers
+            (``incumbent_continuous_soln`` and ``incumbent_boolean_soln``)
+            were updated; otherwise ``False``.
+
+        Notes
+        -----
+        This method updates incumbent buffers *only*; it does not directly
+        assign values onto the user's original model. The transfer to the
+        original model occurs in the GDPopt base algorithm via
+        ``_transfer_incumbent_to_original_model``.
         """
         point = tuple(point)
         payload = self.data_manager.get_solution(point)

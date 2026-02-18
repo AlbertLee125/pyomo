@@ -134,6 +134,17 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         None
             Results are stored on ``self.pyomo_results`` and bounds/state are
             updated on the solver instance.
+
+        Notes
+        -----
+        LD-BD (like other GDPopt meta-solvers) may not populate
+        ``results.solution`` in the returned ``SolverResults``. Instead, LD-BD
+        relies on tracking and transferring an incumbent solution.
+
+        This implementation optionally uses a per-point solution cache (see
+        :meth:`pyomo.contrib.gdpopt.discrete_algorithm_base_class._GDPoptDiscreteAlgorithm._load_incumbent_from_solution_cache`)
+        to reload incumbent buffers when the algorithm switches to an
+        already-evaluated best point without re-solving.
         """
         logger = config.logger
         self.log_formatter = (
