@@ -56,10 +56,9 @@ class TestGDPoptLDBD(unittest.TestCase):
     def test_solve_four_stage_dynamic_model_minimize(self):
         '''
         The testing model is from: 
-          Peng, Z.; Lee, A.; Neira, D. E. B. Addressing Discrete Dynamic Optimization via a Logic-Based Discrete-Steepest Descent Algorithm. arXiv September 14, 2024. https://doi.org/10.48550/arXiv.2409.09237.
-
+          Peng, Z.; Lee, A.; Bernal Neira, D. E. Addressing Discrete Dynamic Optimization via a Logic-Based Discrete-Steepest Descent Algorithm. arXiv September 14, 2024. https://doi.org/10.48550/arXiv.2409.09237.
         '''
-
+        
         
         model = build_model(mode_transfer=True)
         # Discretize the model using dae.collocation

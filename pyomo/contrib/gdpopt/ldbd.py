@@ -9,6 +9,13 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
+#
+#  Citation:
+#  Liñán, D. A.; Ricardez‐Sandoval, L. A. A Benders Decomposition Framework for
+#  the Optimization of Disjunctive Superstructures with Ordered Discrete
+#  Decisions. AIChE Journal 2023, 69 (5), e18008.
+#  https://doi.org/10.1002/aic.18008
+
 
 from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
