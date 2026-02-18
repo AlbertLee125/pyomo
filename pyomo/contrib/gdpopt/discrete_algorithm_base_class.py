@@ -296,40 +296,88 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         super().__init__(**kwds)
         self.data_manager = DiscreteDataManager()
 
-    def _cache_point_solution(self, point, util_block):
+    # def _cache_point_solution(self, point, util_block):
+    #     """Cache variable values for a point.
+
+    #     Parameters
+    #     ----------
+    #     point : iterable[int]
+    #         External-variable point.
+    #     util_block : Block
+    #         Utility block on the model instance whose values should be cached.
+    #         This is typically a cloned subproblem's util block.
+
+    #     Returns
+    #     -------
+    #     None
+
+    #     Notes
+    #     -----
+    #     Values are cached using stable identifiers (``ComponentUID`` string
+    #     representations) so that values can later be replayed onto the
+    #     *original* model's variable lists when updating the incumbent.
+
+    #     The cache currently includes:
+
+    #     - Algebraic variables from ``util_block.algebraic_variable_list``
+    #     - Boolean variables from ``util_block.boolean_variable_list``
+    #     """
+    #     point = tuple(point)
+    #     algebraic = {
+    #         str(ComponentUID(v)): v.value for v in getattr(util_block, 'algebraic_variable_list', [])
+    #     }
+    #     boolean = {
+    #         str(ComponentUID(v)): v.value for v in getattr(util_block, 'boolean_variable_list', [])
+    #     }
+    #     self.data_manager.store_solution(point, {'algebraic': algebraic, 'boolean': boolean})
+
+    def _cache_point_solution(self, point, solved_model):
         """Cache variable values for a point.
 
         Parameters
         ----------
         point : iterable[int]
             External-variable point.
-        util_block : Block
-            Utility block on the model instance whose values should be cached.
-            This is typically a cloned subproblem's util block.
-
-        Returns
-        -------
-        None
+        solved_model : Block
+            A solved model instance (typically the cloned subproblem) that
+            contains primal variable values.
 
         Notes
         -----
-        Values are cached using stable identifiers (``ComponentUID`` string
-        representations) so that values can later be replayed onto the
-        *original* model's variable lists when updating the incumbent.
+        Cache keys are based on *original-model* variable ComponentUID strings.
+        Values are retrieved from the corresponding components on `solved_model`
+        using `ComponentUID(orig_var).find_component(solved_model)`.
 
-        The cache currently includes:
-
-        - Algebraic variables from ``util_block.algebraic_variable_list``
-        - Boolean variables from ``util_block.boolean_variable_list``
+        This avoids mismatches between clone/transformation-specific UIDs and
+        the original model's UIDs when replaying cached solutions.
         """
         point = tuple(point)
-        algebraic = {
-            str(ComponentUID(v)): v.value for v in getattr(util_block, 'algebraic_variable_list', [])
-        }
-        boolean = {
-            str(ComponentUID(v)): v.value for v in getattr(util_block, 'boolean_variable_list', [])
-        }
-        self.data_manager.store_solution(point, {'algebraic': algebraic, 'boolean': boolean})
+
+        algebraic = {}
+        for ov in getattr(self.original_util_block, "algebraic_variable_list", []):
+            uid = str(ComponentUID(ov))
+            sv = ComponentUID(ov).find_component(solved_model)
+            algebraic[uid] = None if sv is None else sv.value
+
+        boolean = {}
+        for ob in getattr(self.original_util_block, "boolean_variable_list", []):
+            uid = str(ComponentUID(ob))
+            sb = ComponentUID(ob).find_component(solved_model)
+            val = None
+            if sb is not None:
+                # Prefer associated binary value when available because logical
+                # transformations may not populate BooleanVar.value consistently.
+                try:
+                    abin = sb.get_associated_binary()
+                except Exception:
+                    abin = None
+                if abin is not None and abin.value is not None:
+                    val = abin.value
+                else:
+                    val = sb.value
+            boolean[uid] = val
+
+        self.data_manager.store_solution(point, {"algebraic": algebraic, "boolean": boolean})
 
     def _load_incumbent_from_solution_cache(self, point, logger=None):
         """Load incumbent buffers from a cached solution payload.
@@ -355,6 +403,26 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         original model occurs in the GDPopt base algorithm via
         ``_transfer_incumbent_to_original_model``.
         """
+        # point = tuple(point)
+        # payload = self.data_manager.get_solution(point)
+        # if payload is None:
+        #     if logger is not None:
+        #         logger.debug("No cached solution available for point %s", point)
+        #     return False
+
+        # algebraic_map = payload.get('algebraic', {})
+        # boolean_map = payload.get('boolean', {})
+
+        # # Align with the original util-block list ordering expected by
+        # # _transfer_incumbent_to_original_model.
+        # self.incumbent_continuous_soln = [
+        #     algebraic_map.get(str(ComponentUID(v)))
+        #     for v in self.original_util_block.algebraic_variable_list
+        # ]
+        # self.incumbent_boolean_soln = [
+        #     boolean_map.get(str(ComponentUID(v)))
+        #     for v in self.original_util_block.boolean_variable_list
+        # ]
         point = tuple(point)
         payload = self.data_manager.get_solution(point)
         if payload is None:
@@ -362,19 +430,29 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                 logger.debug("No cached solution available for point %s", point)
             return False
 
-        algebraic_map = payload.get('algebraic', {})
-        boolean_map = payload.get('boolean', {})
+        algebraic_map = payload.get("algebraic", {})
+        boolean_map = payload.get("boolean", {})
 
-        # Align with the original util-block list ordering expected by
-        # _transfer_incumbent_to_original_model.
-        self.incumbent_continuous_soln = [
+        new_cont = [
             algebraic_map.get(str(ComponentUID(v)))
             for v in self.original_util_block.algebraic_variable_list
         ]
-        self.incumbent_boolean_soln = [
+        new_bool = [
             boolean_map.get(str(ComponentUID(v)))
             for v in self.original_util_block.boolean_variable_list
         ]
+
+        # Defensive: do not clobber a valid incumbent with an unmapped cache entry
+        if all(val is None for val in new_cont):
+            if logger is not None:
+                logger.debug(
+                    "Cached payload for point %s did not map to original algebraic vars; skipping incumbent overwrite.",
+                    point,
+                )
+            return False
+
+        self.incumbent_continuous_soln = new_cont
+        self.incumbent_boolean_soln = new_bool
         return True
 
     def _get_external_information(self, util_block, config):
@@ -510,6 +588,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             "Neighbor").
         config : ConfigBlock
             GDPopt configuration block.
+            Contains ``infinity_output`` used as a penalty for infeasible points.
 
         Returns
         -------
@@ -518,8 +597,18 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             - ``primal_improved`` indicates whether the solve improved the
               solver's incumbent bound.
-            - ``objective`` is the objective value (or penalty value for
-              infeasible points).
+            - ``objective`` is the objective value.
+            - For infeasible points, ``objective`` returns a penalty value.
+            - This penalty is defined by ``config.infinity_output``.
+
+        Notes
+        -----
+        The ``config.infinity_output`` serves two primary purposes:
+        1. It provides a finite numerical penalty for infeasible discrete points.
+        2. It acts as a feasibility threshold for solver outputs.
+        If the subproblem is infeasible, the objective is set to this value.
+        If the solver returns a value $\ge$ ``infinity_output``, the point is marked infeasible.
+        Using a large finite value instead of $inf$ prevents numerical errors in the master problem.
         """
         # 1. Check if already visited (optional, depending on algorithm logic)
         # Some algos might re-evaluate, but usually we skip.
@@ -640,15 +729,45 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             # NOTE: meta-solvers like MindtPy do not accept arbitrary solve()
             # keywords (they validate keys against an internal ConfigDict).
             # Most direct solvers already default to load_solutions=True.
-            if config.minlp_solver != 'mindtpy':
-                minlp_args.setdefault('load_solutions', True)
-            if config.time_limit is not None and config.minlp_solver == 'gams':
-                elapsed = get_main_elapsed_time(self.timing)
-                remaining = max(config.time_limit - elapsed, 1)
-                minlp_args['add_options'] = minlp_args.get('add_options', [])
-                minlp_args['add_options'].append('option reslim=%s;' % remaining)
+            # if config.minlp_solver != 'mindtpy':
+            #     minlp_args.setdefault('load_solutions', True)
+            # if config.time_limit is not None and config.minlp_solver == 'gams':
+            #     elapsed = get_main_elapsed_time(self.timing)
+            #     remaining = max(config.time_limit - elapsed, 1)
+            #     minlp_args['add_options'] = minlp_args.get('add_options', [])
+            #     minlp_args['add_options'].append('option reslim=%s;' % remaining)
 
-            result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
+            # result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
+
+            # NOTE: This is a replacement to the above note
+            # MindtPy is a meta-solver and may not load primal values back onto the
+            # model object we pass in. In LD-BD, subproblems are continuous once the
+            # discrete decisions are fixed, so solve them directly with the NLP solver.
+            if config.minlp_solver == "mindtpy":
+                nlp_solver = minlp_args.get("nlp_solver", None)
+                if nlp_solver is None:
+                    raise ValueError(
+                        "gdpopt.ldbd with minlp_solver='mindtpy' requires "
+                        "minlp_solver_args['nlp_solver'] to solve LD-BD subproblems."
+                    )
+                sub_results = SolverFactory(nlp_solver).solve(subproblem, load_solutions=True)
+            else:
+                # For direct MINLP solvers, ensure solutions are loaded onto subproblem
+                minlp_args.setdefault("load_solutions", True)
+                sub_results = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
+            # Use the results from the solver we actually ran
+            result = sub_results   
+
+            # # NOTE: 
+            # # MindtPy may return a valid termination condition without writing primal
+            # # values back to the model object we provided. If results contain a
+            # # solution, explicitly load it onto `subproblem` so GDPopt can read Var.value.
+            # try:
+            #     if hasattr(result, "solution") and len(result.solution) > 0:
+            #         subproblem.solutions.load_from(result)
+            # except Exception:
+            #     # If loading fails, GDPopt will behave as before (likely no incumbent).
+            #     pass
 
             obj = next(subproblem.component_data_objects(Objective, active=True))
             primal_bound = value(obj)
@@ -781,12 +900,18 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             # Cache the feasible-point solution values regardless of whether
             # the point improves the incumbent. This enables Step5 / end-stage
             # incumbent updates without re-solving.
+            # try:
+            #     sub_util = subproblem.component(self.original_util_block.name)
+            #     self._cache_point_solution(external_var_value, sub_util)
+            # except Exception:
+            #     # Caching is best-effort; it must not interfere with the
+            #     # optimization algorithm.
+            #     pass
+            # NOTE: the above approach to caching relied on the util block's variable lists, which can carry stale references across clones. The below approach uses ComponentUID lookups to avoid this issue.
             try:
-                sub_util = subproblem.component(self.original_util_block.name)
-                self._cache_point_solution(external_var_value, sub_util)
+                # Cache using original-model UIDs, reading values from the solved clone
+                self._cache_point_solution(external_var_value, subproblem)
             except Exception:
-                # Caching is best-effort; it must not interfere with the
-                # optimization algorithm.
                 pass
 
             # NOTE: Not all solver interfaces reliably populate
