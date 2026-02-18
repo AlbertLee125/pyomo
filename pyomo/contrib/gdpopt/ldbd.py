@@ -257,6 +257,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                                 use_best = best_obj > next_point_obj
                             if use_best:
                                 next_point = best_point
+                                # Incumbent values are normally captured when a point is solved.
+                                # Since we are switching to an already-solved best point here,
+                                # reload the incumbent buffers from the cached solution.
+                                self._load_incumbent_from_solution_cache(
+                                    best_point, logger=logger
+                                )
+                            
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
@@ -277,6 +284,14 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
             if self.current_point not in self._anchors:
                 self._anchors.append(self.current_point)
+
+        # Ensure the final incumbent corresponds to the best feasible point.
+        # If the cache is unavailable (e.g., in unit tests that mock subproblem
+        # solves), we skip any attempt to re-solve here to avoid surprising
+        # side effects.
+        best_point, _ = self.data_manager.get_best_solution(sense=self.objective_sense)
+        if best_point is not None:
+            self._load_incumbent_from_solution_cache(best_point, logger=logger)
 
     def _build_master(self, config):
         """Construct the LD-BD master MILP.
