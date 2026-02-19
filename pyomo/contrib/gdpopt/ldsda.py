@@ -440,9 +440,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         self.best_direction = None  # reset best direction
         fmin = float('inf')  # Initialize the best objective value
         best_dist = 0  # Initialize the best distance
-        abs_tol = (
-            config.integer_tolerance
-        )  # Use integer_tolerance for objective comparison
+        abs_bound_tol = (
+            config.bound_tolerance
+        )  # Use bound_tolerance for objective comparison
 
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
@@ -459,19 +459,16 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 if primal_bound is None:
                     continue
 
-                if primal_bound >= self.current_obj - config.bound_tolerance:
-                    continue
-
                 dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
                 # If the neighbor is not better than current, we don't update best_neighbor and we don't flip locally_optimal to False.
-                if primal_bound < fmin - abs_tol:
+                if primal_bound < fmin - abs_bound_tol:
                     fmin = primal_bound
                     best_neighbor = neighbor
                     self.best_direction = direction
                     best_dist = dist
                     locally_optimal = False
-                elif abs(primal_bound - fmin) <= abs_tol and dist > best_dist:
+                elif abs(primal_bound - fmin) <= abs_bound_tol and dist > best_dist:
                     best_neighbor = neighbor
                     self.best_direction = direction
                     best_dist = dist
