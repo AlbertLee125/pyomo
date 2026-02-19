@@ -1,7 +1,7 @@
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2025
+#  Copyright (c) 2008-2026
 #  National Technology and Engineering Solutions of Sandia, LLC
 #  Under the terms of Contract DE-NA0003525 with National Technology and
 #  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
@@ -254,7 +254,6 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver._solve_GDP_subproblem = MagicMock(
             side_effect=[(True, 100.0), (True, 100.0)]
         )
-
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
