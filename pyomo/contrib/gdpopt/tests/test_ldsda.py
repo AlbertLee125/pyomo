@@ -1,13 +1,11 @@
-#  ___________________________________________________________________________
+# ____________________________________________________________________________________
 #
-#  Pyomo: Python Optimization Modeling Objects
-#  Copyright (c) 2008-2026
-#  National Technology and Engineering Solutions of Sandia, LLC
-#  Under the terms of Contract DE-NA0003525 with National Technology and
-#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
-#  rights in this software.
-#  This software is distributed under the 3-clause BSD License.
-#  ___________________________________________________________________________
+# Pyomo: Python Optimization Modeling Objects
+# Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
+# Under the terms of Contract DE-NA0003525 with National Technology and Engineering
+# Solutions of Sandia, LLC, the U.S. Government retains certain rights in this
+# software.  This software is distributed under the 3-clause BSD License.
+# ____________________________________________________________________________________
 from pyomo.environ import (
     SolverFactory,
     value,
@@ -25,6 +23,7 @@ from pyomo.contrib.gdpopt.tests.four_stage_dynamic_model import build_model
 from unittest.mock import MagicMock
 from pyomo.core.expr.logical_expr import exactly
 from pyomo.contrib.gdpopt.ldsda import GDP_LDSDA_Solver
+from pyomo.opt import TerminationCondition
 
 
 class TestGDPoptLDSDA(unittest.TestCase):
@@ -286,9 +285,7 @@ class TestLDSDAUnits(unittest.TestCase):
         # The code checks for: optimal, feasible, globallyOptimal, locallyOptimal,
         # maxTimeLimit, maxIterations, maxEvaluations.
         # We use 'infeasible' or 'error' to trigger the False return.
-        from pyomo.opt import TerminationCondition as tc
-
-        mock_result.solver.termination_condition = tc.error
+        mock_result.solver.termination_condition = TerminationCondition.error
 
         # 3. Run the method
         # We don't need real model objects for the other args since the code exits early
