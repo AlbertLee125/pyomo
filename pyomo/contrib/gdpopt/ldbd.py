@@ -20,6 +20,7 @@
 from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
 from pyomo.contrib.gdpopt.discrete_algorithm_base_class import _GDPoptDiscreteAlgorithm
+from pyomo.contrib.gdpopt.discrete_search_enums import SearchPhase
 from pyomo.contrib.gdpopt.create_oa_subproblems import (
     add_util_block,
     add_disjunction_list,
@@ -113,8 +114,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             GDPopt configuration block providing the logger.
         """
         config.logger.info(
-            "\n"
-            + """Liñán, D. A.; Ricardez‐Sandoval, L. A. A Benders Decomposition Framework for the Optimization of Disjunctive Superstructures with Ordered Discrete Decisions. AIChE Journal 2023, 69 (5), e18008. https://doi.org/10.1002/aic.18008.
+            "\n" + """Liñán, D. A.; Ricardez‐Sandoval, L. A. A Benders Decomposition Framework for the Optimization of Disjunctive Superstructures with Ordered Discrete Decisions. AIChE Journal 2023, 69 (5), e18008. https://doi.org/10.1002/aic.18008.
 
         """.strip()
         )
@@ -187,7 +187,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         self._log_header(logger)
         # Step 1
         # Solve/register the initial point
-        _ = self._solve_discrete_point(self.current_point, "Initial point", config)
+        _ = self._solve_discrete_point(self.current_point, SearchPhase.INITIAL, config)
 
         # Build the master (Step 5 model) once we know the external variable
         # structure.
@@ -207,11 +207,9 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
             # Explicit termination check from ldbd.tex (redundant with
             # bounds_converged for minimization, but kept by request).
-            if (
-                self.UB < float("inf")
-                and self.LB > float("-inf")
-                and abs(self.UB - self.LB) <= config.bound_tolerance
-            ):
+            if self.UB < float("inf") and self.LB > float("-inf") and abs(
+                self.UB - self.LB
+            ) <= config.bound_tolerance:
                 logger.info("LDBD bounds converged: UB=%s, LB=%s", self.UB, self.LB)
                 logger.info("Anchor path: %s", " -> ".join(map(str, self._anchors)))
                 self.pyomo_results.solver.termination_condition = tc.optimal
@@ -236,7 +234,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
             # Always log the master solution in the standard table format.
             self._log_current_state(
-                logger, "Master", tuple(next_point), primal_improved=False
+                logger, SearchPhase.MASTER, tuple(next_point), primal_improved=False
             )
 
             # Update upper bound from the best feasible point seen so far.
@@ -245,7 +243,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             )
             if best_obj is not None:
                 self._update_bounds_after_solve(
-                    "UB update",
+                    SearchPhase.UB_UPDATE,
                     primal=best_obj,
                     logger=logger,
                     current_point=best_point,
@@ -285,10 +283,10 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             if info is not None and info.get("source", None) != "Anchor":
                 # Promote a previously explored neighbor point to an anchor.
                 # Also log using the standard discrete-algorithm tabular format.
-                info["source"] = "Anchor (promoted)"
+                info["source"] = str(SearchPhase.ANCHOR_PROMOTED)
                 self._log_current_state(
                     logger,
-                    "Anchor (promoted)",
+                    SearchPhase.ANCHOR_PROMOTED,
                     self.current_point,
                     primal_improved=False,
                 )
@@ -406,10 +404,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             raise RuntimeError("Master model has not been built.")
 
         mip_args = dict(getattr(config, "mip_solver_args", {}))
-        if (
-            config.time_limit is not None
-            and getattr(config, "mip_solver", None) == "gams"
-        ):
+        if config.time_limit is not None and getattr(config, "mip_solver", None) == "gams":
             elapsed = get_main_elapsed_time(self.timing)
             remaining = max(config.time_limit - elapsed, 1)
             mip_args["add_options"] = mip_args.get("add_options", [])
@@ -466,7 +461,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         anchor_point = tuple(anchor_point)
 
         # Evaluate/register anchor point (center of the neighborhood)
-        _, anchor_obj = self._solve_discrete_point(anchor_point, "Anchor", config)
+        _, anchor_obj = self._solve_discrete_point(anchor_point, SearchPhase.ANCHOR, config)
         anchor_feasible = anchor_obj < config.infinity_output
         if not anchor_feasible:
             return False
@@ -479,7 +474,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             neighbor = tuple(map(sum, zip(anchor_point, direction)))
             if not self.data_manager.is_valid_point(neighbor):
                 continue
-            self._solve_discrete_point(neighbor, "Neighbor", config)
+            self._solve_discrete_point(neighbor, SearchPhase.NEIGHBOR_EVAL, config)
 
         return True
 
@@ -539,10 +534,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             sep.obj = Objective(expr=sep_obj_expr, sense=minimize)
 
         lp_args = dict(getattr(config, "separation_solver_args", {}))
-        if (
-            config.time_limit is not None
-            and getattr(config, "separation_solver", None) == "gams"
-        ):
+        if config.time_limit is not None and getattr(config, "separation_solver", None) == "gams":
             elapsed = get_main_elapsed_time(self.timing)
             remaining = max(config.time_limit - elapsed, 1)
             lp_args["add_options"] = lp_args.get("add_options", [])

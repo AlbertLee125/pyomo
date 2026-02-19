@@ -29,6 +29,10 @@ from pyomo.contrib.gdpopt.create_oa_subproblems import (
     add_transformed_boolean_variable_list,
 )
 
+from pyomo.contrib.gdpopt.discrete_search_enums import DirectionNorm, SearchPhase
+
+
+
 
 class DiscreteDataManager:
     """Manage explored points in a discrete search space.
@@ -572,7 +576,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                 if boolean_var.get_associated_binary() is not None:
                     boolean_var.get_associated_binary().fix(1 if is_active else 0)
 
-    def _solve_discrete_point(self, point, search_type, config):
+    def _solve_discrete_point(self, point, search_type: SearchPhase | str, config):
         """Evaluate a single discrete point and register the result.
 
         This wrapper handles caching (skip if already visited), fixing the
@@ -583,9 +587,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         ----------
         point : tuple[int, ...]
             External-variable point to evaluate.
-        search_type : str
-            Label describing why the point is being evaluated (e.g., "Anchor",
-            "Neighbor").
+        search_type : SearchPhase | str
+            Label describing why the point is being evaluated (e.g.,
+            ``SearchPhase.ANCHOR`` or ``"Anchor"``).
         config : ConfigBlock
             GDPopt configuration block.
             Contains ``infinity_output`` used as a penalty for infeasible points.
@@ -607,7 +611,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         1. It provides a finite numerical penalty for infeasible discrete points.
         2. It acts as a feasibility threshold for solver outputs.
         If the subproblem is infeasible, the objective is set to this value.
-        If the solver returns a value $\ge$ ``infinity_output``, the point is marked infeasible.
+        If the solver returns a value $\\ge$ ``infinity_output``, the point is marked infeasible.
         Using a large finite value instead of $inf$ prevents numerical errors in the master problem.
         """
         # 1. Check if already visited (optional, depending on algorithm logic)
@@ -661,7 +665,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
         return primal_improved, objective
 
-    def _solve_GDP_subproblem(self, external_var_value, search_type, config):
+    def _solve_GDP_subproblem(
+        self, external_var_value, search_type: SearchPhase | str, config
+    ):
         """Solve the GDP subproblem with disjunctions fixed by external variables.
 
         This is the discrete-point evaluation hook used by the discrete base
@@ -782,21 +788,27 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         list[tuple[int, ...]]
             Direction vectors.
 
-            - If ``config.direction_norm == 'L2'``: standard basis vectors and
-              their negatives.
-            - If ``config.direction_norm == 'Linf'``: all combinations from
-              ``{-1, 0, 1}^dimension`` excluding the zero vector.
+            - If ``config.direction_norm == DirectionNorm.L2``: standard basis
+              vectors and their negatives.
+            - If ``config.direction_norm == DirectionNorm.Linf``: all
+              combinations from ``{-1, 0, 1}^dimension`` excluding the zero
+              vector.
         """
-        if config.direction_norm == 'L2':
+        if config.direction_norm == DirectionNorm.L2:
             directions = []
             for i in range(dimension):
                 directions.append(tuple([0] * i + [1] + [0] * (dimension - i - 1)))
                 directions.append(tuple([0] * i + [-1] + [0] * (dimension - i - 1)))
             return directions
-        elif config.direction_norm == 'Linf':
+        elif config.direction_norm == DirectionNorm.Linf:
             directions = list(it.product([-1, 0, 1], repeat=dimension))
             directions.remove((0,) * dimension)  # Remove the zero direction
             return directions
+
+        raise ValueError(
+            "Unrecognized direction_norm=%r (expected %s or %s)"
+            % (config.direction_norm, DirectionNorm.L2, DirectionNorm.Linf)
+        )
 
     def _check_valid_neighbor(self, neighbor):
         """Check whether a neighbor point is valid.

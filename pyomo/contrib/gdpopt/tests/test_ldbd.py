@@ -24,6 +24,7 @@ from unittest import mock
 from contextlib import ExitStack
 from pyomo.contrib.gdpopt.ldbd import GDP_LDBD_Solver
 from pyomo.contrib.gdpopt.discrete_algorithm_base_class import ExternalVarInfo
+from pyomo.contrib.gdpopt.discrete_search_enums import DirectionNorm, SearchPhase
 from pyomo.core.base import ConstraintList
 from pyomo.core.base import ComponentUID
 from pyomo.environ import BooleanVar
@@ -86,7 +87,7 @@ class TestGDPoptLDBD(unittest.TestCase):
                 dxdt.setlb(-300)
                 dxdt.setub(300)
 
-        for direction_norm in ["L2", "Linf"]:
+        for direction_norm in [DirectionNorm.L2, DirectionNorm.Linf]:
             results = SolverFactory("gdpopt.ldbd").solve(
                 model,
                 direction_norm=direction_norm,
@@ -227,7 +228,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -405,7 +406,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
             [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
         s.number_of_external_variables = 2
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         anchor = (2, 2)
 
         calls = []
@@ -421,9 +422,13 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
             is_feasible = s.neighbor_search(anchor, s.config)
 
         self.assertTrue(is_feasible)
-        self.assertIn((anchor, "Anchor"), calls)
+        self.assertIn((anchor, str(SearchPhase.ANCHOR)), calls)
 
-        neighbor_calls = [pt for (pt, typ) in calls if typ == "Neighbor"]
+        neighbor_calls = [
+            pt
+            for (pt, typ) in calls
+            if typ == str(SearchPhase.NEIGHBOR_EVAL)
+        ]
         self.assertEqual(len(neighbor_calls), 8)
         expected_neighbors = {
             (1, 1),
@@ -443,7 +448,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
             [ExternalVarInfo(1, [], 3, 1), ExternalVarInfo(1, [], 3, 1)]
         )
         s.number_of_external_variables = 2
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         anchor = (2, 2)
 
         calls = []
@@ -459,7 +464,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
             is_feasible = s.neighbor_search(anchor, s.config)
 
         self.assertFalse(is_feasible)
-        self.assertEqual(calls, [(anchor, "Anchor")])
+        self.assertEqual(calls, [(anchor, str(SearchPhase.ANCHOR))])
 
     def test_solve_separation_lp_builds_and_solves_lp(self):
         s = GDP_LDBD_Solver()
@@ -576,7 +581,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -624,7 +629,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -684,7 +689,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -761,7 +766,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -784,7 +789,11 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         def neighbor_search_side_effect(anchor_point, config):
             # Register a previously explored point with a non-Anchor source
             s.data_manager.add(
-                (2,), feasible=True, objective=4.0, source="Neighbor", iteration_found=0
+                (2,),
+                feasible=True,
+                objective=4.0,
+                source=str(SearchPhase.NEIGHBOR_EVAL),
+                iteration_found=0,
             )
             return True
 
@@ -820,10 +829,10 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
             s._solve_gdp(m, s.config)
 
         info = s.data_manager.get_info((2,))
-        self.assertEqual(info.get("source"), "Anchor (promoted)")
+        self.assertEqual(info.get("source"), str(SearchPhase.ANCHOR_PROMOTED))
         # Ensure we logged the promotion with the standard label
         calls = [c.args[1] for c in log_state_mock.call_args_list if len(c.args) > 1]
-        self.assertIn("Anchor (promoted)", calls)
+        self.assertIn(SearchPhase.ANCHOR_PROMOTED, calls)
 
     def test_solve_separation_lp_returns_none_when_no_points(self):
         s = GDP_LDBD_Solver()
@@ -941,7 +950,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
 
         # _solve_gdp is usually invoked through solver.solve(), which sets up
         # the main timing context. This unit test calls _solve_gdp directly, so
@@ -980,7 +989,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
                     tuple(anchor_point),
                     feasible=True,
                     objective=5.0,
-                    source="Anchor",
+                    source=str(SearchPhase.ANCHOR),
                     iteration_found=0,
                 )
                 return True
@@ -1050,7 +1059,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = None
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         with pytest.raises(ValueError, match="LD-BD solver requires a starting point"):
@@ -1071,7 +1080,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
@@ -1248,7 +1257,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s = GDP_LDBD_Solver()
         s.config.starting_point = (1,)
         s.config.disjunction_list = [m.disj]
-        s.config.direction_norm = "Linf"
+        s.config.direction_norm = DirectionNorm.Linf
         s.timing.main_timer_start_time = 0.0
 
         s.pyomo_results = mock.MagicMock()
