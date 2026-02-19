@@ -758,17 +758,6 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             # Use the results from the solver we actually ran
             result = sub_results   
 
-            # # NOTE: 
-            # # MindtPy may return a valid termination condition without writing primal
-            # # values back to the model object we provided. If results contain a
-            # # solution, explicitly load it onto `subproblem` so GDPopt can read Var.value.
-            # try:
-            #     if hasattr(result, "solution") and len(result.solution) > 0:
-            #         subproblem.solutions.load_from(result)
-            # except Exception:
-            #     # If loading fails, GDPopt will behave as before (likely no incumbent).
-            #     pass
-
             obj = next(subproblem.component_data_objects(Objective, active=True))
             primal_bound = value(obj)
 
