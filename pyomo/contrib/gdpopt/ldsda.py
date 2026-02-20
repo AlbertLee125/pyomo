@@ -493,8 +493,13 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         Evaluate immediate neighbors of the current point to find a better solution.
 
         Iterates through all search directions, generates neighbors, and solves
-        their subproblems. Uses a tie-breaking mechanism favoring points farther
-        away (Euclidean distance) if objective values are within tolerance.
+        their subproblems. Selects the best neighbor by objective value, using a
+        tie-breaking mechanism that favors points farther away (Euclidean distance)
+        when objective values are within tolerance.
+
+        Note that neighbor selection is based on the objective values returned by
+        the subproblems and is intentionally independent of whether a neighbor
+        improves the global incumbent bound.
 
         Parameters
         ----------

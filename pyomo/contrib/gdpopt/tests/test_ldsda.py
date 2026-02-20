@@ -30,8 +30,7 @@ class TestGDPoptLDSDA(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
     @unittest.skipUnless(
-        SolverFactory('gams').available(False)
-        and SolverFactory('gams').license_is_valid(),
+        SolverFactory('gams').available(False) and SolverFactory('gams').license_is_valid(),
         "gams solver not available",
     )
     def test_solve_four_stage_dynamic_model(self):
@@ -235,9 +234,13 @@ class TestLDSDAUnits(unittest.TestCase):
         """
         Test the tie-breaking logic in the neighbor search.
 
-        Verifies that when two neighbors offer improved objective values
-        within the integer tolerance, the algorithm selects the neighbor
-        that is Euclidean-farther from the current point.
+        Verifies that when two neighbors produce objective values that are
+        equal within the configured tolerance, the algorithm selects the
+        neighbor that is Euclidean-farther from the current point.
+
+        This is intentionally independent of whether the second neighbor
+        improves the global incumbent bound (i.e., it may not set
+        ``primal_improved``).
         """
         self.solver.current_point = (0, 0)
         self.config.integer_tolerance = 1e-5
