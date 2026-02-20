@@ -189,7 +189,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             self.working_model_util_block.BigM = Suffix()
         self._log_header(logger)
         # Solve the initial point
-        _, self.current_obj = self._solve_GDP_subproblem(self.current_point, SearchPhase.INITIAL, config)
+        _, self.current_obj = self._solve_GDP_subproblem(
+            self.current_point, SearchPhase.INITIAL, config
+        )
 
         # Main loop
         locally_optimal = False
@@ -286,7 +288,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             termination_condition = (
                 None if result is None else result.solver.termination_condition
             )
-            solve_successful = termination_condition in successful_termination_conditions
+            solve_successful = (
+                termination_condition in successful_termination_conditions
+            )
 
             if solve_successful:
                 primal_bound = (
@@ -508,9 +512,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         self.best_direction = None  # reset best direction
         current_obj = self.current_obj  # Initialize the best objective value
         best_dist = 0  # Initialize the best distance
-        abs_tol = (
-            config.bound_tolerance
-        )  # Use bound_tolerance for objective comparison
+        abs_tol = config.bound_tolerance  # Use bound_tolerance for objective comparison
 
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
@@ -543,7 +545,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     self.best_direction = direction
                     best_dist = dist
                     locally_optimal = False
-
 
         # Move to the best neighbor if an improvement was found
         if not locally_optimal:

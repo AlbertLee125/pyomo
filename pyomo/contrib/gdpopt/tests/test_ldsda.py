@@ -30,7 +30,8 @@ class TestGDPoptLDSDA(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
     @unittest.skipUnless(
-        SolverFactory('gams').available(False) and SolverFactory('gams').license_is_valid(),
+        SolverFactory('gams').available(False)
+        and SolverFactory('gams').license_is_valid(),
         "gams solver not available",
     )
     def test_solve_four_stage_dynamic_model(self):
@@ -252,7 +253,9 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver._solve_GDP_subproblem = MagicMock(
             side_effect=[(True, 100.0), (False, 100.0)]
         )
-        self.solver.current_obj = 110  # Set current objective to match the mocked subproblem results
+        self.solver.current_obj = (
+            110  # Set current objective to match the mocked subproblem results
+        )
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
