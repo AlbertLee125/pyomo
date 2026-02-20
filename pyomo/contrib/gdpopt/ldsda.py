@@ -582,7 +582,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 primal_improved, primal_bound = self._solve_GDP_subproblem(
                     next_point, SearchPhase.LINE, config
                 )
-                if primal_improved:
+                if primal_improved and primal_bound is not None:
                     self.current_point = next_point
                     self.current_obj = primal_bound
                 else:
