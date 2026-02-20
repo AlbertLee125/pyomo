@@ -189,7 +189,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             self.working_model_util_block.BigM = Suffix()
         self._log_header(logger)
         # Solve the initial point
-        _ = self._solve_GDP_subproblem(self.current_point, SearchPhase.INITIAL, config)
+        self.primal_improved, self.current_obj = self._solve_GDP_subproblem(self.current_point, SearchPhase.INITIAL, config)
 
         # Main loop
         locally_optimal = False
