@@ -243,7 +243,7 @@ class TestLDSDAUnits(unittest.TestCase):
         ``primal_improved``).
         """
         self.solver.current_point = (0, 0)
-        self.config.integer_tolerance = 1e-5
+        self.config.bound_tolerance = 1e-5
 
         # Manually define neighbors from (0, 0):
         # 1. (1, 0) - Distance 1
