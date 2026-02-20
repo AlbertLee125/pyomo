@@ -537,8 +537,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 primal_improved, primal_bound = self._solve_GDP_subproblem(
                     neighbor, SearchPhase.NEIGHBOR, config
                 )
-                if primal_improved:
-                    locally_optimal = False
 
                 if primal_bound is None:
                     continue
