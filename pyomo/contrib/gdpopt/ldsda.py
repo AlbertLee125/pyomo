@@ -271,12 +271,17 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             primal_improved = self._handle_subproblem_result(
                 result, subproblem, external_var_value, config, search_type
             )
-            # Only retrieve primal_bound if the solve succeeded; otherwise return None
-            if primal_improved:
-                obj = next(subproblem.component_data_objects(Objective, active=True))
-                primal_bound = value(obj)
-            else:
-                primal_bound = None
+            # # Previous Strategy: Only retrieve primal_bound if the solve succeeded; otherwise return None
+            # if primal_improved:
+            #     obj = next(subproblem.component_data_objects(Objective, active=True))
+            #     primal_bound = value(obj)
+            # else:
+            #     primal_bound = None
+
+            # Current Strategy: Always retrieve the primal_bound regardless of the solve result
+            obj = next(subproblem.component_data_objects(Objective, active=True))
+            primal_bound = value(obj)
+
         return primal_improved, primal_bound
 
     def get_external_information(self, util_block, config):
