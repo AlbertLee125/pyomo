@@ -310,10 +310,13 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     primal_bound = None
             else:
                 primal_bound = None
-        # Add a check here that if primal_improved is True, then primal_bound is not None. If this is not the case, it indicates an issue with the subproblem solve or the bound extraction logic.
-        if primal_improved and primal_bound is None:    
+        # Sanity check: an indicated improvement should be accompanied by a valid
+        # primal bound. Warn if this consistency check fails.
+        if primal_improved and primal_bound is None:
             config.logger.warning(
-                "Subproblem solve indicated an improvement, but no valid primal bound was extracted. This may indicate an issue with the subproblem solve or the bound extraction logic."
+                "Subproblem solve indicated an improvement, but no valid primal bound "
+                "was extracted. This may indicate an issue with the subproblem solve "
+                "or the bound extraction logic."
             )
         return primal_improved, primal_bound
 
