@@ -506,11 +506,11 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         locally_optimal = True
         best_neighbor = None
         self.best_direction = None  # reset best direction
-        fmin = float('inf')  # Initialize the best objective value
+        current_obj = self.current_obj  # Initialize the best objective value
         best_dist = 0  # Initialize the best distance
         abs_tol = (
-            config.integer_tolerance
-        )  # Use integer_tolerance for objective comparison
+            config.bound_tolerance
+        )  # Use bound_tolerance for objective comparison
 
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
@@ -523,6 +523,8 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 primal_improved, primal_bound = self._solve_GDP_subproblem(
                     neighbor, SearchPhase.NEIGHBOR, config
                 )
+                if primal_improved:
+                    locally_optimal = False
 
                 if primal_bound is None:
                     continue
@@ -530,13 +532,13 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
                 # NOTE: Neighbor selection must be independent of incumbent updates.
-                if primal_bound < fmin - abs_tol:
-                    fmin = primal_bound
+                if primal_bound < current_obj - abs_tol:
+                    current_obj = primal_bound
                     best_neighbor = neighbor
                     self.best_direction = direction
                     best_dist = dist
                     locally_optimal = False
-                elif abs(primal_bound - fmin) <= abs_tol and dist > best_dist:
+                elif abs(primal_bound - current_obj) <= abs_tol and dist > best_dist:
                     best_neighbor = neighbor
                     self.best_direction = direction
                     best_dist = dist
@@ -546,7 +548,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         # Move to the best neighbor if an improvement was found
         if not locally_optimal:
             self.current_point = best_neighbor
-            self.current_obj = fmin
+            self.current_obj = current_obj
 
         return locally_optimal
 
