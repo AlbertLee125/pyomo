@@ -252,7 +252,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver._solve_GDP_subproblem = MagicMock(
             side_effect=[(True, 100.0), (False, 100.0)]
         )
-
+        self.solver.current_obj = 110  # Set current objective to match the mocked subproblem results
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
