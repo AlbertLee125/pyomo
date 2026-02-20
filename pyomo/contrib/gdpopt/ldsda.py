@@ -498,9 +498,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 if primal_bound is None:
                     continue
 
-                if primal_bound >= self.current_obj - config.bound_tolerance:
-                    continue
-
                 dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
                 # NOTE: only flip locally_optimal when we choose/update best_neighbor
