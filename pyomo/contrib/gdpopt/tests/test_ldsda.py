@@ -24,6 +24,7 @@ from unittest.mock import MagicMock
 from pyomo.core.expr.logical_expr import exactly
 from pyomo.contrib.gdpopt.ldsda import GDP_LDSDA_Solver
 from pyomo.opt import TerminationCondition as tc
+from pyomo.core import maximize
 
 
 class TestGDPoptLDSDA(unittest.TestCase):
@@ -263,6 +264,25 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
+        self.assertEqual(self.solver.current_point, (1, 1))
+
+    def test_neighbor_search_maximization_selects_larger_objective(self):
+        """Test that neighbor selection respects a maximization objective."""
+        self.solver.current_point = (0, 0)
+        self.solver.current_obj = 0.0
+        # Force objective sense for this unit test
+        self.solver.pyomo_results = MagicMock()
+        self.solver.pyomo_results.problem.sense = maximize
+
+        self.config.bound_tolerance = 1e-6
+        self.solver.directions = [(1, 0), (1, 1)]
+        self.solver._check_valid_neighbor = MagicMock(return_value=True)
+
+        # Under maximization, the (1,1) neighbor should be preferred due to larger objective
+        self.solver._solve_GDP_subproblem = MagicMock(
+            side_effect=[(True, 1.0), (False, 2.0)]
+        )
+        self.solver.neighbor_search(self.config)
         self.assertEqual(self.solver.current_point, (1, 1))
 
     def test_handle_subproblem_result_none(self):

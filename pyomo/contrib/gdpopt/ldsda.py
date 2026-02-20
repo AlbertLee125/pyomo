@@ -34,7 +34,7 @@ from pyomo.contrib.gdpopt.config_options import (
 from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_values
 from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
 from pyomo.contrib.satsolver.satsolver import satisfiable
-from pyomo.core import minimize, Suffix, TransformationFactory, Objective, value
+from pyomo.core import maximize, minimize, Suffix, TransformationFactory, Objective, value
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
@@ -526,6 +526,8 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         best_dist = 0  # Initialize the best distance
         abs_tol = config.bound_tolerance  # Use bound_tolerance for objective comparison
 
+        is_minimization = self.objective_sense != maximize
+
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
             # Generate a neighbor point by applying the direction to the current point
@@ -544,7 +546,13 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
                 # NOTE: Neighbor selection must be independent of incumbent updates.
-                if primal_bound < current_obj - abs_tol:
+                if is_minimization and primal_bound < current_obj - abs_tol:
+                    current_obj = primal_bound
+                    best_neighbor = neighbor
+                    self.best_direction = direction
+                    best_dist = dist
+                    locally_optimal = False
+                elif (not is_minimization) and primal_bound > current_obj + abs_tol:
                     current_obj = primal_bound
                     best_neighbor = neighbor
                     self.best_direction = direction
