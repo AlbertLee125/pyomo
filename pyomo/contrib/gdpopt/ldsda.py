@@ -10,6 +10,7 @@
 from collections import namedtuple
 import enum
 import itertools as it
+import math
 import traceback
 from pyomo.common.config import document_kwargs_from_configdict
 from pyomo.common.errors import InfeasibleConstraintException
@@ -242,7 +243,8 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             primal bound (incumbent).
         primal_bound : float
             The objective value (primal bound) obtained from the subproblem.
-            Returns None if the subproblem was infeasible.
+            Returns None if the subproblem was infeasible or the solve did not
+            produce a usable result.
         """
         self.fix_disjunctions_with_external_var(external_var_value)
         subproblem = self.working_model.clone()
@@ -271,16 +273,39 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             primal_improved = self._handle_subproblem_result(
                 result, subproblem, external_var_value, config, search_type
             )
-            # # Previous Strategy: Only retrieve primal_bound if the solve succeeded; otherwise return None
-            # if primal_improved:
-            #     obj = next(subproblem.component_data_objects(Objective, active=True))
-            #     primal_bound = value(obj)
-            # else:
-            #     primal_bound = None
 
-            # Current Strategy: Always retrieve the primal_bound regardless of the solve result
-            obj = next(subproblem.component_data_objects(Objective, active=True))
-            primal_bound = value(obj)
+            successful_termination_conditions = {
+                tc.optimal,
+                tc.feasible,
+                tc.globallyOptimal,
+                tc.locallyOptimal,
+                tc.maxTimeLimit,
+                tc.maxIterations,
+                tc.maxEvaluations,
+            }
+            termination_condition = (
+                None if result is None else result.solver.termination_condition
+            )
+            solve_successful = termination_condition in successful_termination_conditions
+
+            if solve_successful:
+                primal_bound = (
+                    result.problem.upper_bound
+                    if self.objective_sense == minimize
+                    else result.problem.lower_bound
+                )
+                if primal_bound is None:
+                    try:
+                        obj = next(
+                            subproblem.component_data_objects(Objective, active=True)
+                        )
+                        primal_bound = value(obj)
+                    except Exception:
+                        primal_bound = None
+                if primal_bound is None or not math.isfinite(primal_bound):
+                    primal_bound = None
+            else:
+                primal_bound = None
 
         return primal_improved, primal_bound
 
@@ -453,8 +478,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         if neighbor in self.explored_point_set:
             return False
         return all(
-            external_var_value >= external_var_info.LB
-            and external_var_value <= external_var_info.UB
+            external_var_info.LB <= external_var_value <= external_var_info.UB
             for external_var_value, external_var_info in zip(
                 neighbor, self.working_model_util_block.external_var_info_list
             )
@@ -500,47 +524,23 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     neighbor, SearchPhase.NEIGHBOR, config
                 )
 
-                # if primal_bound is None:
-                #     continue
+                if primal_bound is None:
+                    continue
 
-                # dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
+                dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
 
-                # # NOTE: only flip locally_optimal when we choose/update best_neighbor
-                # if primal_bound < fmin - abs_tol:
-                #     fmin = primal_bound
-                #     best_neighbor = neighbor
-                #     self.best_direction = direction
-                #     best_dist = dist
-                #     locally_optimal = False
-                # elif abs(primal_bound - fmin) <= abs_tol and dist > best_dist:
-                #     best_neighbor = neighbor
-                #     self.best_direction = direction
-                #     best_dist = dist
-                #     locally_optimal = False
-                if primal_improved:
+                # NOTE: Neighbor selection must be independent of incumbent updates.
+                if primal_bound < fmin - abs_tol:
+                    fmin = primal_bound
+                    best_neighbor = neighbor
+                    self.best_direction = direction
+                    best_dist = dist
                     locally_optimal = False
-
-                    # --- Tiebreaker Logic ---
-                    if abs(fmin - primal_bound) < abs_tol:
-                        # Calculate the squared Euclidean distance from the current point
-                        dist = sum(
-                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
-                        )
-
-                        # Update the best neighbor if this one is farther away
-                        if dist > best_dist:
-                            best_neighbor = neighbor
-                            self.best_direction = direction
-                            best_dist = dist  # Update the best distance
-                    else:
-                        # Standard improvement logic: update if the objective is better
-                        fmin = primal_bound  # Update the best objective value
-                        best_neighbor = neighbor  # Update the best neighbor
-                        self.best_direction = direction  # Update the best direction
-                        best_dist = sum(
-                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
-                        )
-                    # --- End of Tiebreaker Logic ---
+                elif abs(primal_bound - fmin) <= abs_tol and dist > best_dist:
+                    best_neighbor = neighbor
+                    self.best_direction = direction
+                    best_dist = dist
+                    locally_optimal = False
 
 
         # Move to the best neighbor if an improvement was found

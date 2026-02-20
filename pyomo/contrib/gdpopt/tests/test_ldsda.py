@@ -30,8 +30,7 @@ class TestGDPoptLDSDA(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
     @unittest.skipUnless(
-        SolverFactory('gams').available(False)
-        and SolverFactory('gams').license_is_valid(),
+        SolverFactory('gams').available(False) and SolverFactory('gams').license_is_valid(),
         "gams solver not available",
     )
     def test_solve_four_stage_dynamic_model(self):
@@ -251,7 +250,7 @@ class TestLDSDAUnits(unittest.TestCase):
         # Mock subproblems to return IDENTICAL objectives
         # This forces the code to check the distance to break the tie
         self.solver._solve_GDP_subproblem = MagicMock(
-            side_effect=[(True, 100.0), (True, 100.0)]
+            side_effect=[(True, 100.0), (False, 100.0)]
         )
 
         self.solver.neighbor_search(self.config)
