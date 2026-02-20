@@ -112,7 +112,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
     Ovalle, D.; Liñán, D. A.; Lee, A.; Gómez, J. M.; Ricardez-Sandoval, L.; Grossmann, I. E.; Bernal Neira, D. E. Logic-Based Discrete-Steepest Descent: A Solution Method for Process Synthesis Generalized Disjunctive Programs. Computers & Chemical Engineering 2025, 195, 108993. https://doi.org/10.1016/j.compchemeng.2024.108993.
     """
 
-    CONFIG = _GDPoptAlgorithm.CONFIG()  # CONFIG = ConfigBlock("GDPopt")
+    CONFIG = _GDPoptAlgorithm.CONFIG()
     _add_mip_solver_configs(CONFIG)
     _add_nlp_solver_configs(CONFIG, default_solver='ipopt')
     _add_nlp_solve_configs(
@@ -177,7 +177,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         TransformationFactory('core.logical_to_linear').apply_to(self.working_model)
         # Now that logical_to_disjunctive has been called.
         add_transformed_boolean_variable_list(self.working_model_util_block)
-        self._get_external_information(self.working_model_util_block, config)
+        self.get_external_information(self.working_model_util_block, config)
         self.directions = self._get_directions(
             self.number_of_external_variables, config
         )
@@ -279,7 +279,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 primal_bound = None
         return primal_improved, primal_bound
 
-    def _get_external_information(self, util_block, config):
+    def get_external_information(self, util_block, config):
         """
         Extract information from the model to perform the reformulation with external variables.
 
@@ -479,9 +479,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         self.best_direction = None  # reset best direction
         fmin = float('inf')  # Initialize the best objective value
         best_dist = 0  # Initialize the best distance
-        abs_bound_tol = (
-            config.bound_tolerance
-        )  # Use bound_tolerance for objective comparison
+        abs_tol = (
+            config.integer_tolerance
+        )  # Use integer_tolerance for objective comparison
 
         # Loop through all possible directions (neighbors)
         for direction in self.directions:
@@ -495,29 +495,34 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                     neighbor, SearchPhase.NEIGHBOR, config
                 )
 
-                if primal_bound is None:
-                    continue
-
-                dist = sum((x - y) ** 2 for x, y in zip(neighbor, self.current_point))
-
-                # If the neighbor is not better than current, we don't update best_neighbor and we don't flip locally_optimal to False.
-                if primal_bound < fmin - abs_bound_tol:
-                    fmin = primal_bound
-                    best_neighbor = neighbor
-                    self.best_direction = direction
-                    best_dist = dist
-                    locally_optimal = False
-                elif abs(primal_bound - fmin) <= abs_bound_tol and dist > best_dist:
-                    best_neighbor = neighbor
-                    self.best_direction = direction
-                    best_dist = dist
+                if primal_improved:
                     locally_optimal = False
 
+                    # --- Tiebreaker Logic ---
+                    if abs(fmin - primal_bound) < abs_tol:
+                        # Calculate the squared Euclidean distance from the current point
+                        dist = sum(
+                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
+                        )
+
+                        # Update the best neighbor if this one is farther away
+                        if dist > best_dist:
+                            best_neighbor = neighbor
+                            self.best_direction = direction
+                            best_dist = dist  # Update the best distance
+                    else:
+                        # Standard improvement logic: update if the objective is better
+                        fmin = primal_bound  # Update the best objective value
+                        best_neighbor = neighbor  # Update the best neighbor
+                        self.best_direction = direction  # Update the best direction
+                        best_dist = sum(
+                            (x - y) ** 2 for x, y in zip(neighbor, self.current_point)
+                        )
+                    # --- End of Tiebreaker Logic ---
 
         # Move to the best neighbor if an improvement was found
         if not locally_optimal:
             self.current_point = best_neighbor
-            self.current_obj = fmin
 
         return locally_optimal
 
@@ -537,12 +542,12 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         while primal_improved:
             next_point = tuple(map(sum, zip(self.current_point, self.best_direction)))
             if self._check_valid_neighbor(next_point):
-                primal_improved, primal_bound = self._solve_GDP_subproblem(
-                    next_point, 'Line search', config
+                # Unpack the tuple and use only the first boolean value
+                primal_improved, _ = self._solve_GDP_subproblem(
+                    next_point, SearchPhase.LINE, config
                 )
                 if primal_improved:
                     self.current_point = next_point
-                    self.current_obj = primal_bound
                 else:
                     break
             else:

@@ -23,7 +23,7 @@ from pyomo.contrib.gdpopt.tests.four_stage_dynamic_model import build_model
 from unittest.mock import MagicMock
 from pyomo.core.expr.logical_expr import exactly
 from pyomo.contrib.gdpopt.ldsda import GDP_LDSDA_Solver
-from pyomo.opt import TerminationCondition
+from pyomo.opt import TerminationCondition as tc
 
 
 class TestGDPoptLDSDA(unittest.TestCase):
@@ -139,7 +139,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver.any_termination_criterion_met = MagicMock(return_value=True)
         self.solver.neighbor_search = MagicMock()
         # 2. Mock internal setup methods
-        self.solver._get_external_information = MagicMock()
+        self.solver.get_external_information = MagicMock()
         self.solver._get_directions = MagicMock(return_value=[])
 
         # 3. FIX: Manually set the attribute that _get_external_information would have set
@@ -169,7 +169,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "should be a list of ExactlyExpression"
         ):
-            self.solver._get_external_information(self.model.util_block, self.config)
+            self.solver.get_external_information(self.model.util_block, self.config)
 
     def test_exactly_number_greater_than_one(self):
         """
@@ -186,7 +186,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_logical_constraint_list = [self.model.lc]
 
         with self.assertRaisesRegex(ValueError, "only works for exactly_number = 1"):
-            self.solver._get_external_information(self.model.util_block, self.config)
+            self.solver.get_external_information(self.model.util_block, self.config)
 
     def test_starting_point_mismatch(self):
         """
@@ -207,7 +207,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "length of the provided starting point"
         ):
-            self.solver._get_external_information(self.model.util_block, self.config)
+            self.solver.get_external_information(self.model.util_block, self.config)
 
     def test_disjunction_list_processing(self):
         """
@@ -225,7 +225,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_disjunction_list = [self.model.disj]
         self.config.starting_point = [1]  # Correct length
 
-        self.solver._get_external_information(self.model.util_block, self.config)
+        self.solver.get_external_information(self.model.util_block, self.config)
 
         # Verify it processed the disjunction
         self.assertEqual(len(self.model.util_block.external_var_info_list), 1)
@@ -253,6 +253,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver._solve_GDP_subproblem = MagicMock(
             side_effect=[(True, 100.0), (True, 100.0)]
         )
+
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
@@ -285,7 +286,7 @@ class TestLDSDAUnits(unittest.TestCase):
         # The code checks for: optimal, feasible, globallyOptimal, locallyOptimal,
         # maxTimeLimit, maxIterations, maxEvaluations.
         # We use 'infeasible' or 'error' to trigger the False return.
-        mock_result.solver.termination_condition = TerminationCondition.error
+        mock_result.solver.termination_condition = tc.error
 
         # 3. Run the method
         # We don't need real model objects for the other args since the code exits early
