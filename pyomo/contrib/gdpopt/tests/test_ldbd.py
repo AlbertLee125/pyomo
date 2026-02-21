@@ -102,45 +102,27 @@ class TestGDPoptLDBD(unittest.TestCase):
                 ],
                 time_limit=100,
             )
-            print(f"termination_condition: {results.solver.termination_condition}")
-            print(f"solver_status: {getattr(results.solver, 'status', None)}")
-            print(f"message: {getattr(results.solver, 'message', None)}")
 
-            all_vars = list(model.component_data_objects(Var, descend_into=True))
-            non_none = [v for v in all_vars if v.value is not None]
-            print(f"vars total={len(all_vars)}, vars with value={len(non_none)}")
-            for v in non_none[:10]:
-                print(f"  {v.name} = {v.value}")
+            # The solver should report an optimal termination for this test case.
+            self.assertEqual(
+                results.solver.termination_condition,
+                TerminationCondition.optimal,
+                msg=(
+                    "GDPopt LDBD did not terminate optimally for direction_norm "
+                    f"{direction_norm}. "
+                    f"Reported termination_condition="
+                    f"{results.solver.termination_condition!r}"
+                ),
+            )
 
-            if len(results.solution) > 0:
-                print(f"Number of variables in solution: {len(results.solution[0].variable)}")
-                count = 0
-                for k, v in results.solution[0].variable.items():
-                    print(f"Result variable: {k}, value: {v}")
-                    count += 1
-                    if count > 5:
-                        break
-            else:
-                print("WARNING: The results object contains NO solutions!")
-            if results.solver.termination_condition == TerminationCondition.optimal:
-                # If the results object is empty, LDBD usually stores the best 
-                # model state internally or has already updated the model variables.
-                
-                # Check if the objective has a value; if not, we force it.
-                if value(model.obj, exception=False) is None:
-                    # LDBD usually keeps the 'best_solution_found'
-                    # Let's try to reload from the solver's internal best model if possible
-                    pass 
+            # Ensure the objective value is defined and equal to the expected optimum.
+            obj_val = value(model.obj, exception=False)
+            if obj_val is None:
+                self.fail(
+                    "Optimization reported optimal, but model objective has no value."
+                )
 
-                # Robust assertion: 
-                # Use 'exception=False' to see what the value actually is before crashing
-                obj_val = value(model.obj, exception=False)
-                print(f"Final Objective Value: {obj_val}")
-                
-                if obj_val is None:
-                    self.fail("Optimization reported optimal, but model objective is still None.")
-                
-                self.assertAlmostEqual(obj_val, -23.305325, places=4)
+            self.assertAlmostEqual(obj_val, -23.305325, places=4)
 
 
 class TestGDPoptLDBDUnit(unittest.TestCase):
