@@ -250,7 +250,9 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                     current_point=best_point,
                 )
 
-            # Step Five: Loop break in the paper by Liñán, D. A. (2023). If the solution of the master problem is the same as one of the previously evaluated points, then we need to update the current point with the best solution from anchors
+            # Step Five: Loop break from Liñán, D. A. (2023). If the solution of the
+            # master problem matches a previously evaluated point, update the current
+            # point with the best solution from anchors.
 
             if tuple(next_point) in self._anchors:
                 if best_point is not None and best_obj is not None:
