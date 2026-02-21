@@ -443,11 +443,17 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             for v in self.original_util_block.boolean_variable_list
         ]
 
-        # Defensive: do not clobber a valid incumbent with an unmapped cache entry
-        if all(val is None for val in new_cont):
+        # Defensive: do not clobber a valid incumbent with an unmapped cache entry.
+        # Only trigger this guard when there are algebraic variables and none of
+        # them (nor any boolean variables, if present) are mapped in the payload.
+        has_algebraic = bool(self.original_util_block.algebraic_variable_list)
+        has_boolean = bool(self.original_util_block.boolean_variable_list)
+        all_cont_none = has_algebraic and all(val is None for val in new_cont)
+        all_bool_none = has_boolean and all(val is None for val in new_bool)
+        if all_cont_none and (not has_boolean or all_bool_none):
             if logger is not None:
                 logger.debug(
-                    "Cached payload for point %s did not map to original algebraic vars; skipping incumbent overwrite.",
+                    "Cached payload for point %s did not map to original algebraic/boolean vars; skipping incumbent overwrite.",
                     point,
                 )
             return False
