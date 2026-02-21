@@ -249,13 +249,27 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
                     s, "any_termination_criterion_met", side_effect=[False, True]
                 )
             )
-            stack.enter_context(mock.patch.object(s, "_solve_discrete_point", solve_point_mock))
-            stack.enter_context(mock.patch.object(s, "neighbor_search", neighbor_search_mock))
+            stack.enter_context(
+                mock.patch.object(s, "_solve_discrete_point", solve_point_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "neighbor_search", neighbor_search_mock)
+            )
             stack.enter_context(mock.patch.object(s, "refine_cuts", refine_mock))
-            stack.enter_context(mock.patch.object(s, "_solve_master", solve_master_mock))
-            stack.enter_context(mock.patch.object(s, "_update_bounds_after_solve", update_bounds_mock))
-            stack.enter_context(mock.patch.object(s, "_log_current_state", log_state_mock))
-            stack.enter_context(mock.patch.object(s, "_load_incumbent_from_solution_cache", load_cache_mock))
+            stack.enter_context(
+                mock.patch.object(s, "_solve_master", solve_master_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_update_bounds_after_solve", update_bounds_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(s, "_log_current_state", log_state_mock)
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    s, "_load_incumbent_from_solution_cache", load_cache_mock
+                )
+            )
 
             s._solve_gdp(m, s.config)
 
@@ -407,9 +421,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         self.assertIn((anchor, str(SearchPhase.ANCHOR)), calls)
 
         neighbor_calls = [
-            pt
-            for (pt, typ) in calls
-            if typ == str(SearchPhase.NEIGHBOR_EVAL)
+            pt for (pt, typ) in calls if typ == str(SearchPhase.NEIGHBOR_EVAL)
         ]
         self.assertEqual(len(neighbor_calls), 8)
         expected_neighbors = {

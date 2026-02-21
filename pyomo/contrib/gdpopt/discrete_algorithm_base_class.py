@@ -29,8 +29,6 @@ from pyomo.contrib.gdpopt.create_oa_subproblems import (
 from pyomo.contrib.gdpopt.discrete_search_enums import DirectionNorm, SearchPhase
 
 
-
-
 class DiscreteDataManager:
     """Manage explored points in a discrete search space.
 
@@ -378,7 +376,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                     val = sb.value
             boolean[uid] = val
 
-        self.data_manager.store_solution(point, {"algebraic": algebraic, "boolean": boolean})
+        self.data_manager.store_solution(
+            point, {"algebraic": algebraic, "boolean": boolean}
+        )
 
     def _load_incumbent_from_solution_cache(self, point, logger=None):
         """Load incumbent buffers from a cached solution payload.
@@ -404,26 +404,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         original model occurs in the GDPopt base algorithm via
         ``_transfer_incumbent_to_original_model``.
         """
-        # point = tuple(point)
-        # payload = self.data_manager.get_solution(point)
-        # if payload is None:
-        #     if logger is not None:
-        #         logger.debug("No cached solution available for point %s", point)
-        #     return False
 
-        # algebraic_map = payload.get('algebraic', {})
-        # boolean_map = payload.get('boolean', {})
-
-        # # Align with the original util-block list ordering expected by
-        # # _transfer_incumbent_to_original_model.
-        # self.incumbent_continuous_soln = [
-        #     algebraic_map.get(str(ComponentUID(v)))
-        #     for v in self.original_util_block.algebraic_variable_list
-        # ]
-        # self.incumbent_boolean_soln = [
-        #     boolean_map.get(str(ComponentUID(v)))
-        #     for v in self.original_util_block.boolean_variable_list
-        # ]
         point = tuple(point)
         payload = self.data_manager.get_solution(point)
         if payload is None:
@@ -691,7 +672,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
         # --- IMPORTANT: rebuild util-block variable lists on the cloned model ---
         sub_util = subproblem.component(self.original_util_block.name)
-        
+
         # These lists are plain Python attributes and can carry stale VarData
         # references across clones. Force regeneration so update_incumbent()
         # sees variables on *this* subproblem instance.
@@ -759,13 +740,17 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                         "gdpopt.ldbd with minlp_solver='mindtpy' requires "
                         "minlp_solver_args['nlp_solver'] to solve LD-BD subproblems."
                     )
-                sub_results = SolverFactory(nlp_solver).solve(subproblem, load_solutions=True)
+                sub_results = SolverFactory(nlp_solver).solve(
+                    subproblem, load_solutions=True
+                )
             else:
                 # For direct MINLP solvers, ensure solutions are loaded onto subproblem
                 minlp_args.setdefault("load_solutions", True)
-                sub_results = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
+                sub_results = SolverFactory(config.minlp_solver).solve(
+                    subproblem, **minlp_args
+                )
             # Use the results from the solver we actually ran
-            result = sub_results   
+            result = sub_results
 
             obj = next(subproblem.component_data_objects(Objective, active=True))
             primal_bound = value(obj)
