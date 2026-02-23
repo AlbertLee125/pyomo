@@ -910,30 +910,13 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             tc.maxIterations,
             tc.maxEvaluations,
         }:
-            # Cache the feasible-point solution values regardless of whether
-            # the point improves the incumbent. This enables Step5 / end-stage
-            # incumbent updates without re-solving.
-            # try:
-            #     sub_util = subproblem.component(self.original_util_block.name)
-            #     self._cache_point_solution(external_var_value, sub_util)
-            # except Exception:
-            #     # Caching is best-effort; it must not interfere with the
-            #     # optimization algorithm.
-            #     pass
-            # NOTE: the above approach to caching relied on the util block's variable lists, which can carry stale references across clones. The below approach uses ComponentUID lookups to avoid this issue.
+
             try:
                 # Cache using original-model UIDs, reading values from the solved clone
                 self._cache_point_solution(external_var_value, subproblem)
             except Exception:
                 pass
 
-            # NOTE: Not all solver interfaces reliably populate
-            # results.problem.upper_bound / lower_bound (they may be None even
-            # when a feasible/optimal solution is loaded onto the model).
-            # For discrete algorithms, we need a numeric primal bound to:
-            #   (1) update UB/LB,
-            #   (2) record an incumbent,
-            #   (3) transfer the incumbent back to the original model.
             primal_bound = self._primal_bound_from_results(
                 subproblem_result, subproblem
             )
