@@ -282,7 +282,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             # Register next trial point as an anchor for refinement in the next
             # iteration.
             info = self.data_manager.get_info(self.current_point)
-            if info is not None and info.get("source", None) != "Anchor":
+            if info is not None and info.get("source", None) != str(SearchPhase.ANCHOR):
                 # Promote a previously explored neighbor point to an anchor.
                 # Also log using the standard discrete-algorithm tabular format.
                 info["source"] = str(SearchPhase.ANCHOR_PROMOTED)
