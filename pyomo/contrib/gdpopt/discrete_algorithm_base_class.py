@@ -702,10 +702,10 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             # result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
 
-            # TODO: We should update this part 
-            # after MindtPy supports loading solutions onto the model object passed in. 
-            # The current workaround is to solve the subproblem directly with the NLP solver, 
-            # which should reliably load primal values for incumbent updates and solution caching.  
+            # TODO: We should update this part
+            # after MindtPy supports loading solutions onto the model object passed in.
+            # The current workaround is to solve the subproblem directly with the NLP solver,
+            # which should reliably load primal values for incumbent updates and solution caching.
             if config.minlp_solver == "mindtpy":
                 nlp_solver = minlp_args.get("nlp_solver", None)
                 if nlp_solver is None:
@@ -760,7 +760,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         if results is None:
             return None
 
-        term_cond = getattr(getattr(results, 'solver', None), 'termination_condition', None)
+        term_cond = getattr(
+            getattr(results, 'solver', None), 'termination_condition', None
+        )
         if term_cond not in {
             tc.optimal,
             tc.feasible,
@@ -772,16 +774,9 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         }:
             return None
 
-        # Prefer bounds reported by the solver interface, when present.
-        primal_bound = (
-            results.problem.upper_bound
-            if self.objective_sense == minimize
-            else results.problem.lower_bound
-        )
-        if primal_bound is not None:
-            return primal_bound
-
-        # Fall back to evaluating the objective on the (hopefully) loaded model.
+        # NOTE:
+        # What we do is just grab the first active objective and evaluate it,
+        # not the actual primal bound
         try:
             obj = next(model.component_data_objects(Objective, active=True))
         except StopIteration:
