@@ -310,7 +310,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         -----
         Cache keys are based on *original-model* variable ComponentUID strings.
         Values are retrieved from the corresponding components on `solved_model`
-        using `ComponentUID(orig_var).find_component(solved_model)`.
+        using `ComponentUID(orig_var).find_component_on(solved_model)`.
 
         This avoids mismatches between clone/transformation-specific UIDs and
         the original model's UIDs when replaying cached solutions.
@@ -320,13 +320,21 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         algebraic = {}
         for ov in getattr(self.original_util_block, "algebraic_variable_list", []):
             uid = str(ComponentUID(ov))
-            sv = ComponentUID(ov).find_component(solved_model)
+            cuid = ComponentUID(ov)
+            if hasattr(cuid, 'find_component_on'):
+                sv = cuid.find_component_on(solved_model)
+            else:
+                sv = cuid.find_component(solved_model)
             algebraic[uid] = None if sv is None else sv.value
 
         boolean = {}
         for ob in getattr(self.original_util_block, "boolean_variable_list", []):
             uid = str(ComponentUID(ob))
-            sb = ComponentUID(ob).find_component(solved_model)
+            cuid = ComponentUID(ob)
+            if hasattr(cuid, 'find_component_on'):
+                sb = cuid.find_component_on(solved_model)
+            else:
+                sb = cuid.find_component(solved_model)
             val = None
             if sb is not None:
                 # Prefer associated binary value when available because logical
