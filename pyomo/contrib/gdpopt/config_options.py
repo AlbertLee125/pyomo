@@ -435,7 +435,7 @@ def _add_mip_solver_configs(CONFIG):
     CONFIG.declare(
         "mip_solver",
         ConfigValue(
-            default="gurobi",
+            default="appsi_highs",
             description="""
             Mixed-integer linear solver to use. Note that no persistent solvers
             other than the auto-persistent solvers in the APPSI package are
@@ -615,7 +615,7 @@ def _add_ldbd_configs(CONFIG):
     CONFIG.declare(
         "separation_solver",
         ConfigValue(
-            default="gurobi",
+            default="appsi_highs",
             description=(
                 "LP solver to use for the LD-BD cut refinement (separation LP)."
             ),

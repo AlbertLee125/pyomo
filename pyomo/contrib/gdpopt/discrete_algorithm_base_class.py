@@ -295,41 +295,6 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         super().__init__(**kwds)
         self.data_manager = DiscreteDataManager()
 
-    # def _cache_point_solution(self, point, util_block):
-    #     """Cache variable values for a point.
-
-    #     Parameters
-    #     ----------
-    #     point : iterable[int]
-    #         External-variable point.
-    #     util_block : Block
-    #         Utility block on the model instance whose values should be cached.
-    #         This is typically a cloned subproblem's util block.
-
-    #     Returns
-    #     -------
-    #     None
-
-    #     Notes
-    #     -----
-    #     Values are cached using stable identifiers (``ComponentUID`` string
-    #     representations) so that values can later be replayed onto the
-    #     *original* model's variable lists when updating the incumbent.
-
-    #     The cache currently includes:
-
-    #     - Algebraic variables from ``util_block.algebraic_variable_list``
-    #     - Boolean variables from ``util_block.boolean_variable_list``
-    #     """
-    #     point = tuple(point)
-    #     algebraic = {
-    #         str(ComponentUID(v)): v.value for v in getattr(util_block, 'algebraic_variable_list', [])
-    #     }
-    #     boolean = {
-    #         str(ComponentUID(v)): v.value for v in getattr(util_block, 'boolean_variable_list', [])
-    #     }
-    #     self.data_manager.store_solution(point, {'algebraic': algebraic, 'boolean': boolean})
-
     def _cache_point_solution(self, point, solved_model):
         """Cache variable values for a point.
 
@@ -729,10 +694,10 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             # result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
 
-            # NOTE: This is a replacement to the above note
-            # MindtPy is a meta-solver and may not load primal values back onto the
-            # model object we pass in. In LD-BD, subproblems are continuous once the
-            # discrete decisions are fixed, so solve them directly with the NLP solver.
+            # TODO: We should update this part 
+            # after MindtPy supports loading solutions onto the model object passed in. 
+            # The current workaround is to solve the subproblem directly with the NLP solver, 
+            # which should reliably load primal values for incumbent updates and solution caching.  
             if config.minlp_solver == "mindtpy":
                 nlp_solver = minlp_args.get("nlp_solver", None)
                 if nlp_solver is None:
@@ -752,14 +717,70 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             # Use the results from the solver we actually ran
             result = sub_results
 
-            obj = next(subproblem.component_data_objects(Objective, active=True))
-            primal_bound = value(obj)
-
             primal_improved = self._handle_subproblem_result(
                 result, subproblem, external_var_value, config, search_type
             )
 
+            # Only report an objective value when we have a usable primal
+            # solution loaded onto the model.
+            primal_bound = self._primal_bound_from_results(result, subproblem)
+
         return primal_improved, primal_bound
+
+    def _primal_bound_from_results(self, results, model):
+        """Return a numeric primal bound when a usable solution is present.
+
+        Parameters
+        ----------
+        results : SolverResults or None
+            Solver results object.
+        model : ConcreteModel
+            Model instance that should contain loaded primal values.
+
+        Returns
+        -------
+        float or None
+            Objective value / bound when available, else ``None``.
+
+        Notes
+        -----
+        Some solver interfaces can return a termination condition suggesting a
+        feasible solve while not actually loading primal values onto the model.
+        In those cases, evaluating the objective can raise; we treat that as
+        unavailable and return ``None``.
+        """
+        if results is None:
+            return None
+
+        term_cond = getattr(getattr(results, 'solver', None), 'termination_condition', None)
+        if term_cond not in {
+            tc.optimal,
+            tc.feasible,
+            tc.globallyOptimal,
+            tc.locallyOptimal,
+            tc.maxTimeLimit,
+            tc.maxIterations,
+            tc.maxEvaluations,
+        }:
+            return None
+
+        # Prefer bounds reported by the solver interface, when present.
+        primal_bound = (
+            results.problem.upper_bound
+            if self.objective_sense == minimize
+            else results.problem.lower_bound
+        )
+        if primal_bound is not None:
+            return primal_bound
+
+        # Fall back to evaluating the objective on the (hopefully) loaded model.
+        try:
+            obj = next(model.component_data_objects(Objective, active=True))
+        except StopIteration:
+            return None
+
+        primal_bound = value(obj, exception=False)
+        return primal_bound
 
     def _get_directions(self, dimension, config):
         """Generate neighborhood search directions.
@@ -910,14 +931,13 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             #   (1) update UB/LB,
             #   (2) record an incumbent,
             #   (3) transfer the incumbent back to the original model.
-            primal_bound = (
-                subproblem_result.problem.upper_bound
-                if self.objective_sense == minimize
-                else subproblem_result.problem.lower_bound
+            primal_bound = self._primal_bound_from_results(
+                subproblem_result, subproblem
             )
             if primal_bound is None:
-                obj = next(subproblem.component_data_objects(Objective, active=True))
-                primal_bound = value(obj)
+                # Termination condition suggested feasibility, but we do not
+                # have a reliable primal objective value.
+                return False
             primal_improved = self._update_bounds_after_solve(
                 search_type,
                 primal=primal_bound,

@@ -67,7 +67,8 @@ class TestGDPoptLDBD(unittest.TestCase):
 
         Peng, Z.; Lee, A.; Bernal Neira, D. E. Addressing Discrete Dynamic
         Optimization via a Logic-Based Discrete-Steepest Descent Algorithm.
-        arXiv September 14, 2024. https://doi.org/10.48550/arXiv.2409.09237.
+        In 2024 IEEE 63rd Conference on Decision and Control (CDC); 2024;
+        pp 1664–1669. https://doi.org/10.1109/CDC56724.2024.10886477.
 
         This test can require external solvers depending on configuration.
         """
@@ -93,8 +94,6 @@ class TestGDPoptLDBD(unittest.TestCase):
                 direction_norm=direction_norm,
                 minlp_solver="mindtpy",
                 minlp_solver_args={"mip_solver": "appsi_highs", "nlp_solver": "ipopt"},
-                # minlp_solver="gams",
-                # minlp_solver_args={'solver': "ipopt"},
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
@@ -235,7 +234,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         update_bounds_mock = mock.MagicMock()
         log_state_mock = mock.MagicMock()
 
-        # Force Step5 branch: best point strictly better than repeated point
+        # Force Step 5 branch: best point strictly better than repeated point
         s.data_manager.get_best_solution = mock.MagicMock(return_value=((2,), 0.5))
         s.data_manager.get_info = mock.MagicMock(
             return_value={"objective": 1.0, "source": "Anchor"}
