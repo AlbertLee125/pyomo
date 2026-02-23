@@ -689,7 +689,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             # Ensure primal variable values are loaded onto the model for
             # incumbent updates and solution caching.
             #
-            # NOTE: meta-solvers like MindtPy do not accept arbitrary solve()
+            # TODO: meta-solvers like MindtPy do not accept arbitrary solve()
             # keywords (they validate keys against an internal ConfigDict).
             # Most direct solvers already default to load_solutions=True.
             # if config.minlp_solver != 'mindtpy':
