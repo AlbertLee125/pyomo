@@ -14,8 +14,9 @@ from pyomo.contrib.fbbt.fbbt import fbbt
 
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
 from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
-from pyomo.core import minimize, TransformationFactory, Objective, value
+from pyomo.core import Constraint, Var, minimize, TransformationFactory, Objective, value
 from pyomo.core.base import ComponentUID
+from pyomo.core.expr.visitor import polynomial_degree
 from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
@@ -685,39 +686,98 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             except InfeasibleConstraintException:
                 return False, None
 
+            # TODO： After Mindtpy supports solving MIPs and NLPs, we can route to the appropriate solver instead of always calling Mindtpy for the MINLP subproblems. This will likely require some refactoring of the current solve_GDP_subproblem method.
+            def _classify_algebraic_model(model):
+                """Classify an algebraic model as LP/MIP/NLP/MINLP.
+
+                Classification is based on whether any unfixed discrete
+                variables remain and whether any active objective/constraint
+                expressions are nonlinear.
+                """
+                has_discrete = False
+                for v in model.component_data_objects(Var, active=True):
+                    if v.fixed:
+                        continue
+                    if v.is_binary() or v.is_integer():
+                        has_discrete = True
+                        break
+
+                is_nonlinear = False
+                # Check objective(s)
+                for obj in model.component_data_objects(Objective, active=True):
+                    deg = polynomial_degree(obj.expr)
+                    if deg not in (0, 1):
+                        is_nonlinear = True
+                        break
+                # Check constraints only if objective looks linear
+                if not is_nonlinear:
+                    for con in model.component_data_objects(Constraint, active=True):
+                        deg = polynomial_degree(con.body)
+                        if deg not in (0, 1):
+                            is_nonlinear = True
+                            break
+
+                if has_discrete and is_nonlinear:
+                    return "minlp"
+                if has_discrete:
+                    return "mip"
+                if is_nonlinear:
+                    return "nlp"
+                return "lp"
+
             minlp_args = dict(config.minlp_solver_args)
-            # Ensure primal variable values are loaded onto the model for
-            # incumbent updates and solution caching.
-            #
-            # TODO: meta-solvers like MindtPy do not accept arbitrary solve()
-            # keywords (they validate keys against an internal ConfigDict).
-            # Most direct solvers already default to load_solutions=True.
-            # if config.minlp_solver != 'mindtpy':
-            #     minlp_args.setdefault('load_solutions', True)
-            # if config.time_limit is not None and config.minlp_solver == 'gams':
-            #     elapsed = get_main_elapsed_time(self.timing)
-            #     remaining = max(config.time_limit - elapsed, 1)
-            #     minlp_args['add_options'] = minlp_args.get('add_options', [])
-            #     minlp_args['add_options'].append('option reslim=%s;' % remaining)
 
-            # result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
-
-            # TODO: We should update this part
-            # after MindtPy supports loading solutions onto the model object passed in.
-            # The current workaround is to solve the subproblem directly with the NLP solver,
-            # which should reliably load primal values for incumbent updates and solution caching.
+            # Solver routing:
+            # - If the user selected MindtPy as the MINLP meta-solver, only use
+            #   it for true MINLPs (discrete + nonlinear). For NLP / LP / MIP
+            #   subproblems, solve directly with the configured nlp_solver / mip_solver.
+            # - For direct solvers, call the configured solver and ensure primal
+            #   values are loaded onto the model.
             if config.minlp_solver == "mindtpy":
-                nlp_solver = minlp_args.get("nlp_solver", None)
-                if nlp_solver is None:
-                    raise ValueError(
-                        "gdpopt.ldbd with minlp_solver='mindtpy' requires "
-                        "minlp_solver_args['nlp_solver'] to solve LD-BD subproblems."
+                problem_class = _classify_algebraic_model(subproblem)
+
+                if problem_class in {"lp", "mip"}:
+                    mip_solver = minlp_args.get("mip_solver", None)
+                    if mip_solver is None:
+                        raise ValueError(
+                            "gdpopt.ldbd with minlp_solver='mindtpy' requires "
+                            "minlp_solver_args['mip_solver'] to solve LP/MIP subproblems."
+                        )
+                    mip_args = dict(minlp_args.get("mip_solver_args", {}))
+                    mip_args.setdefault("load_solutions", True)
+                    sub_results = SolverFactory(mip_solver).solve(
+                        subproblem, **mip_args
                     )
-                sub_results = SolverFactory(nlp_solver).solve(
-                    subproblem, load_solutions=True
-                )
+
+                elif problem_class == "nlp":
+                    nlp_solver = minlp_args.get("nlp_solver", None)
+                    if nlp_solver is None:
+                        raise ValueError(
+                            "gdpopt.ldbd with minlp_solver='mindtpy' requires "
+                            "minlp_solver_args['nlp_solver'] to solve NLP subproblems."
+                        )
+                    nlp_args = dict(minlp_args.get("nlp_solver_args", {}))
+                    nlp_args.setdefault("load_solutions", True)
+                    sub_results = SolverFactory(nlp_solver).solve(
+                        subproblem, **nlp_args
+                    )
+
+                else:
+                    # MINLP: use MindtPy as requested
+                    minlp_args.pop("load_solutions", None)
+                    sub_results = SolverFactory("mindtpy").solve(
+                        subproblem, **minlp_args
+                    )
+                    # Best-effort: if MindtPy returned a solution in results,
+                    # try to load it onto the model so incumbent updates and
+                    # objective evaluation can proceed.
+                    try:
+                        subproblem.solutions.load_from(sub_results)
+                    except Exception:
+                        pass
+
             else:
-                # For direct MINLP solvers, ensure solutions are loaded onto subproblem
+                # For direct solvers, ensure solutions are loaded onto subproblem
                 minlp_args.setdefault("load_solutions", True)
                 sub_results = SolverFactory(config.minlp_solver).solve(
                     subproblem, **minlp_args
