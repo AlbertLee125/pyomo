@@ -74,15 +74,18 @@ LOA_solvers_available = all(
 GLOA_solvers_available = RUN_GLOBAL_TESTS and all(
     SolverFactory(s).available(exception_flag=False) for s in GLOA_solvers
 )
-license_available = RUN_GLOBAL_TESTS and GLOA_solvers_available and SolverFactory(
-    global_nlp_solver
-).license_is_valid()
+license_available = (
+    RUN_GLOBAL_TESTS
+    and GLOA_solvers_available
+    and SolverFactory(global_nlp_solver).license_is_valid()
+)
 
 large_logical_example_available = RUN_LARGE_TESTS and LOA_solvers_available
 
-gurobi_available = SolverFactory('gurobi').available(
-    exception_flag=False
-) and SolverFactory('gurobi').license_is_valid()
+gurobi_available = (
+    SolverFactory('gurobi').available(exception_flag=False)
+    and SolverFactory('gurobi').license_is_valid()
+)
 
 
 class TestGDPoptUnit(unittest.TestCase):
@@ -1066,9 +1069,8 @@ class TestGDPopt(unittest.TestCase):
         self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1e-2)
 
     @unittest.skipUnless(
-        SolverFactory('appsi_gurobi').available(exception_flag=False) and SolverFactory(
-            'appsi_gurobi'
-        ).license_is_valid(),
+        SolverFactory('appsi_gurobi').available(exception_flag=False)
+        and SolverFactory('appsi_gurobi').license_is_valid(),
         "Legacy APPSI Gurobi solver is not available",
     )
     def test_auto_persistent_solver(self):
