@@ -693,7 +693,7 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
             except InfeasibleConstraintException:
                 return False, None
 
-            # TODO： After Mindtpy supports solving MIPs and NLPs, we can route to the appropriate solver instead of always calling Mindtpy for the MINLP subproblems. This will likely require some refactoring of the current solve_GDP_subproblem method.
+            # TODO： After Mindtpy supports solving MIPs and NLPs, we can route to the appropriate solver instead of always calling Mindtpy for the MINLP subproblems. This will likely require some refactoring of the current solve_GDP_subproblem method. Issue https://github.com/Pyomo/pyomo/issues/3855 tracks this future enhancement.
             def _classify_algebraic_model(model):
                 """Classify an algebraic model as LP/MIP/NLP/MINLP.
 
