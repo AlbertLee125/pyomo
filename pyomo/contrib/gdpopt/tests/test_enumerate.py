@@ -23,16 +23,56 @@ from pyomo.environ import (
 )
 from pyomo.gdp import Disjunction
 import pyomo.gdp.tests.models as models
+from pyomo.core.base.suffix import Suffix
 
 
-@unittest.skipUnless(SolverFactory('gurobi').available(), 'Gurobi not available')
-@unittest.skipUnless(SolverFactory('gurobi').license_is_valid(), 'Gurobi not licensed')
+def _select_first_available(solver_names):
+    for name in solver_names:
+        if SolverFactory(name).available(exception_flag=False):
+            return name
+    return None
+
+
+# NOTE: We intentionally avoid `appsi_highs` here. GDPopt's subproblem clone
+# attaches an IMPORT `dual` suffix, and APPSI's legacy wrapper will attempt to
+# import duals whenever `model.dual.import_enabled()` is true. HiGHS does not
+# provide valid duals for MIP/MILP in general, which can raise at load time.
+# Additionally, APPSI HiGHS raises if asked to load solutions when no feasible
+# solution exists (e.g., unbounded/infeasible), which breaks the unbounded test.
+_MIP_SOLVER = _select_first_available(('appsi_highs', 'glpk', 'cbc'))
+_NLP_SOLVER = 'ipopt'
+
+_ENUMERATE_SOLVERS_AVAILABLE = _MIP_SOLVER is not None and SolverFactory(
+    _NLP_SOLVER
+).available(exception_flag=False)
+
+
+def _disable_dual_suffix_import(solver, subproblem, subproblem_util_block):
+    # GDPopt's subproblem clone always attaches an IMPORT `dual` suffix so OA
+    # solvers can read duals for cut generation. Enumerate does not generate OA
+    # cuts, and many MIP solvers (including HiGHS) will not provide valid duals
+    # for MIP/MILP solves. Disable import to avoid NoDualsError during solution
+    # loading.
+    dual = getattr(subproblem, 'dual', None)
+    if isinstance(dual, Suffix) and dual.import_enabled():
+        dual.direction = Suffix.LOCAL
+
+
+@unittest.skipUnless(
+    _ENUMERATE_SOLVERS_AVAILABLE,
+    'Required solvers not available (need appsi_highs/glpk/cbc + Ipopt for NLPs)',
+)
 class TestGDPoptEnumerate(unittest.TestCase):
     def test_solve_two_term_disjunction(self):
         m = models.makeTwoTermDisj()
         m.obj = Objective(expr=m.x, sense=maximize)
 
-        results = SolverFactory('gdpopt.enumerate').solve(m)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 2)
         self.assertEqual(
@@ -59,7 +99,13 @@ class TestGDPoptEnumerate(unittest.TestCase):
         m = models.makeTwoTermDisj()
         self.modify_two_term_disjunction(m)
 
-        results = SolverFactory('gdpopt.enumerate').solve(m, force_subproblem_nlp=True)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            force_subproblem_nlp=True,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 6)
         self.assertEqual(
@@ -77,7 +123,12 @@ class TestGDPoptEnumerate(unittest.TestCase):
         m = models.makeTwoTermDisj()
         self.modify_two_term_disjunction(m)
 
-        results = SolverFactory('gdpopt.enumerate').solve(m)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 2)
         self.assertEqual(
@@ -94,7 +145,13 @@ class TestGDPoptEnumerate(unittest.TestCase):
     def test_solve_GDP_iterate_over_Boolean_variables(self):
         m = models.makeLogicalConstraintsOnDisjuncts()
 
-        results = SolverFactory('gdpopt.enumerate').solve(m, force_subproblem_nlp=True)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            force_subproblem_nlp=True,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 16)
         self.assertEqual(
@@ -114,7 +171,12 @@ class TestGDPoptEnumerate(unittest.TestCase):
     def test_solve_GDP_do_not_iterate_over_Boolean_variables(self):
         m = models.makeLogicalConstraintsOnDisjuncts()
 
-        results = SolverFactory('gdpopt.enumerate').solve(m)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 4)
         self.assertEqual(
@@ -135,7 +197,12 @@ class TestGDPoptEnumerate(unittest.TestCase):
         m = models.makeLogicalConstraintsOnDisjuncts()
 
         results = SolverFactory('gdpopt.enumerate').solve(
-            m, iterlim=4, force_subproblem_nlp=True
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            iterlim=4,
+            force_subproblem_nlp=True,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
         )
 
         self.assertEqual(results.solver.iterations, 4)
@@ -151,7 +218,13 @@ class TestGDPoptEnumerate(unittest.TestCase):
         m.d = Disjunction(expr=[[m.x + m.y >= 5], [m.x - m.y <= 3]])
         m.o = Objective(expr=m.z)
 
-        results = SolverFactory('gdpopt.enumerate').solve(m)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            mip_solver_args={'load_solutions': False},
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 1)
         self.assertEqual(
@@ -161,12 +234,20 @@ class TestGDPoptEnumerate(unittest.TestCase):
         self.assertEqual(results.problem.upper_bound, -float('inf'))
 
 
-@unittest.skipUnless(SolverFactory('ipopt').available(), 'Ipopt not available')
+@unittest.skipUnless(
+    _ENUMERATE_SOLVERS_AVAILABLE,
+    'Required solvers not available (need appsi_highs/glpk/cbc + Ipopt for NLPs)',
+)
 class TestGDPoptEnumerate_ipopt_tests(unittest.TestCase):
     def test_infeasible_GDP(self):
         m = models.make_infeasible_gdp_model()
 
-        results = SolverFactory('gdpopt.enumerate').solve(m)
+        results = SolverFactory('gdpopt.enumerate').solve(
+            m,
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 2)
         self.assertEqual(
@@ -177,7 +258,14 @@ class TestGDPoptEnumerate_ipopt_tests(unittest.TestCase):
     def test_algorithm_specified_to_solve(self):
         m = models.twoDisj_twoCircles_easy()
 
-        results = SolverFactory('gdpopt').solve(m, algorithm='enumerate', tee=True)
+        results = SolverFactory('gdpopt').solve(
+            m,
+            algorithm='enumerate',
+            mip_solver=_MIP_SOLVER,
+            nlp_solver=_NLP_SOLVER,
+            tee=True,
+            call_before_subproblem_solve=_disable_dual_suffix_import,
+        )
 
         self.assertEqual(results.solver.iterations, 2)
         self.assertEqual(

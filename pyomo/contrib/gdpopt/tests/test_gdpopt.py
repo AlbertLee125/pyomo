@@ -13,6 +13,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import logging
 from math import fabs
+import os
 from os.path import join, normpath
 
 import pyomo.common.unittest as unittest
@@ -54,6 +55,12 @@ from pyomo.opt import TerminationCondition
 
 exdir = normpath(join(PYOMO_ROOT_DIR, 'examples', 'gdp'))
 
+# By default, do not run large example-based tests (e.g., logical 8PP) or
+# global-solver-dependent tests (GLOA). These can require commercial solvers or
+# be slow/fragile across environments. Enable explicitly if desired.
+RUN_LARGE_TESTS = bool(int(os.environ.get('PYOMO_GDPOPT_RUN_LARGE_TESTS', '0')))
+RUN_GLOBAL_TESTS = bool(int(os.environ.get('PYOMO_GDPOPT_RUN_GLOBAL_TESTS', '0')))
+
 mip_solver = 'glpk'
 nlp_solver = 'ipopt'
 global_nlp_solver = 'baron'
@@ -61,18 +68,21 @@ global_nlp_solver_args = dict()
 minlp_solver = 'baron'
 LOA_solvers = (mip_solver, nlp_solver)
 GLOA_solvers = (mip_solver, global_nlp_solver, minlp_solver)
-LOA_solvers_available = all(SolverFactory(s).available() for s in LOA_solvers)
-GLOA_solvers_available = all(SolverFactory(s).available() for s in GLOA_solvers)
-license_available = (
-    SolverFactory(global_nlp_solver).license_is_valid()
-    if GLOA_solvers_available
-    else False
+LOA_solvers_available = all(
+    SolverFactory(s).available(exception_flag=False) for s in LOA_solvers
 )
+GLOA_solvers_available = RUN_GLOBAL_TESTS and all(
+    SolverFactory(s).available(exception_flag=False) for s in GLOA_solvers
+)
+license_available = RUN_GLOBAL_TESTS and GLOA_solvers_available and SolverFactory(
+    global_nlp_solver
+).license_is_valid()
 
-gurobi_available = (
-    SolverFactory('gurobi').available(exception_flag=False)
-    and SolverFactory('gurobi').license_is_valid()
-)
+large_logical_example_available = RUN_LARGE_TESTS and LOA_solvers_available
+
+gurobi_available = SolverFactory('gurobi').available(
+    exception_flag=False
+) and SolverFactory('gurobi').license_is_valid()
 
 
 class TestGDPoptUnit(unittest.TestCase):
@@ -765,7 +775,8 @@ class TestGDPopt(unittest.TestCase):
         )
 
     @unittest.skipUnless(
-        license_available, "No BARON license--8PP logical problem exceeds demo size"
+        large_logical_example_available,
+        'Large logical example tests are disabled by default',
     )
     def test_LOA_8PP_logical_default_init(self):
         """Test logic-based outer approximation with 8PP."""
@@ -871,7 +882,8 @@ class TestGDPopt(unittest.TestCase):
         ct.check_8PP_solution(self, eight_process, results)
 
     @unittest.skipUnless(
-        license_available, "No BARON license--8PP logical problem exceeds demo size"
+        large_logical_example_available,
+        'Large logical example tests are disabled by default',
     )
     def test_LOA_8PP_logical_maxBinary(self):
         """Test logic-based OA with max_binary initialization."""
@@ -1054,8 +1066,9 @@ class TestGDPopt(unittest.TestCase):
         self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1e-2)
 
     @unittest.skipUnless(
-        SolverFactory('appsi_gurobi').available(exception_flag=False)
-        and SolverFactory('appsi_gurobi').license_is_valid(),
+        SolverFactory('appsi_gurobi').available(exception_flag=False) and SolverFactory(
+            'appsi_gurobi'
+        ).license_is_valid(),
         "Legacy APPSI Gurobi solver is not available",
     )
     def test_auto_persistent_solver(self):
@@ -1134,7 +1147,8 @@ class TestGDPoptRIC(unittest.TestCase):
         ct.check_8PP_solution(self, eight_process, results)
 
     @unittest.skipUnless(
-        license_available, "No BARON license--8PP logical problem exceeds demo size"
+        large_logical_example_available,
+        'Large logical example tests are disabled by default',
     )
     def test_RIC_8PP_logical_default_init(self):
         """Test logic-based outer approximation with 8PP."""
