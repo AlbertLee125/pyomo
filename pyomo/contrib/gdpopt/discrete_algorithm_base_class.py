@@ -14,7 +14,14 @@ from pyomo.contrib.fbbt.fbbt import fbbt
 
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
 from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
-from pyomo.core import Constraint, Var, minimize, TransformationFactory, Objective, value
+from pyomo.core import (
+    Constraint,
+    Var,
+    minimize,
+    TransformationFactory,
+    Objective,
+    value,
+)
 from pyomo.core.base import ComponentUID
 from pyomo.core.expr.visitor import polynomial_degree
 from pyomo.opt import SolverFactory
