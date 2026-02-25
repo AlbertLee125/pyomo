@@ -30,6 +30,7 @@ from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_val
 from pyomo.contrib.gdpopt.util import get_main_elapsed_time
 from pyomo.core import maximize, Suffix, TransformationFactory
 from pyomo.opt import SolverFactory
+from pyomo.opt import TerminationCondition as tc
 
 
 @SolverFactory.register(
@@ -146,6 +147,17 @@ class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
 
         # Log the search path at termination
         logger.info("Search path: %s", " -> ".join(map(str, self._path)))
+
+        # Stamp locallyOptimal termination if appropriate
+        
+        if (
+            locally_optimal
+            and hasattr(self, "pyomo_results")
+            and getattr(self.pyomo_results.solver, "termination_condition", tc.unknown) == tc.unknown
+        ):
+            self.pyomo_results.solver.termination_condition = tc.locallyOptimal
+
+        return locally_optimal
 
     def any_termination_criterion_met(self, config):
         """

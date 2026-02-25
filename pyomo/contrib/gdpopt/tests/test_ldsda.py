@@ -68,6 +68,7 @@ class TestGDPoptLDSDA(unittest.TestCase):
                 time_limit=100,
             )
             self.assertAlmostEqual(value(model.obj), -23.305325, places=4)
+            self.assertEqual(result.solver.termination_condition, tc.locallyOptimal)
 
 
 class TestLDSDALinearSearchUnit(unittest.TestCase):
