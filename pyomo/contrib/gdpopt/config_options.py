@@ -435,7 +435,7 @@ def _add_mip_solver_configs(CONFIG):
     CONFIG.declare(
         "mip_solver",
         ConfigValue(
-            default="gurobi",
+            default="appsi_highs",
             description="""
             Mixed-integer linear solver to use. Note that no persistent solvers
             other than the auto-persistent solvers in the APPSI package are
@@ -564,5 +564,66 @@ def _add_ldsda_configs(CONFIG):
             The list of disjunctions to be reformulated into external variables.
             The disjunctions should be in the same order of provided starting point.
             """,
+        ),
+    )
+
+
+def _add_ldbd_configs(CONFIG):
+    CONFIG.declare(
+        "direction_norm",
+        ConfigValue(
+            default='L2',
+            domain=In(['L2', 'Linf']),
+            description="The norm to use for the search direction",
+        ),
+    )
+    CONFIG.declare(
+        "starting_point",
+        ConfigValue(default=None, description="The value list of external variables."),
+    )
+    CONFIG.declare(
+        "logical_constraint_list",
+        ConfigValue(
+            default=None,
+            domain=ComponentDataSet(LogicalConstraint),
+            description="""
+            The list of logical constraints to be reformulated into external variables.
+            The logical constraints should be in the same order of provided starting point.
+            The provided logical constraints should be ExactlyExpressions.""",
+        ),
+    )
+    CONFIG.declare(
+        "disjunction_list",
+        ConfigValue(
+            default=None,
+            domain=ComponentDataSet(Disjunction),
+            description="""
+            The list of disjunctions to be reformulated into external variables.
+            The disjunctions should be in the same order of provided starting point.
+            """,
+        ),
+    )
+    CONFIG.declare(
+        'infinity_output',
+        ConfigValue(
+            default=1e8,
+            domain=NonNegativeFloat,
+            description="Value to use for infeasible points instead of infinity.",
+        ),
+    )
+
+    CONFIG.declare(
+        "separation_solver",
+        ConfigValue(
+            default="appsi_highs",
+            description=(
+                "LP solver to use for the LD-BD cut refinement (separation LP)."
+            ),
+        ),
+    )
+    CONFIG.declare(
+        "separation_solver_args",
+        ConfigBlock(
+            description="Keyword arguments for the separation LP solver.", implicit=True
         ),
     )
