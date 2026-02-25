@@ -201,7 +201,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         while True:
             # Termination check (time / iteration / bounds)
             if self.any_termination_criterion_met(config):
-                logger.info("Anchor path: %s", " -> ".join(map(str, self._path)))
+                logger.info("Search path: %s", " -> ".join(map(str, self._path)))
                 break
 
             # Explicit termination check from ldbd.tex (redundant with
@@ -212,7 +212,8 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 and abs(self.UB - self.LB) <= config.bound_tolerance
             ):
                 logger.info("LDBD bounds converged: UB=%s, LB=%s", self.UB, self.LB)
-                logger.info("Anchor path: %s", " -> ".join(map(str, self._anchors)))
+                logger.info("Search path: %s", " -> ".join(map(str, self._path)))
+                logger.info("Anchor points: %s", " -> ".join(map(str, self._anchors)))
                 self.pyomo_results.solver.termination_condition = tc.optimal
                 break
 
@@ -229,6 +230,8 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             if next_point is None:
                 # If the master cannot be solved, we cannot proceed.
                 logger.info("Master MILP failed to solve.")
+                logger.info("Search path: %s", " -> ".join(map(str, self._path)))
+                logger.info("Anchor points: %s", " -> ".join(map(str, self._anchors)))
                 if self.pyomo_results.solver.termination_condition is None:
                     self.pyomo_results.solver.termination_condition = tc.error
                 break
@@ -334,7 +337,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         Side effects:
 
         - Sets ``self.master``.
-        - Initializes ``self._cut_indices`` and ``self._anchors``.
+        - Initializes ``self._cut_indices``.
 
         Examples
         --------
@@ -375,7 +378,6 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         # Store master + initialize registries used by the refinement logic.
         self.master = master
         self._cut_indices = {}
-        self._anchors = []
 
         return master
 

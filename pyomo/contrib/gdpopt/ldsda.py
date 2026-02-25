@@ -7,15 +7,10 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
-from collections import namedtuple
-import enum
-import itertools as it
-import math
-import traceback
 from pyomo.common.config import document_kwargs_from_configdict
-from pyomo.common.errors import InfeasibleConstraintException
-from pyomo.contrib.fbbt.fbbt import fbbt
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
+from pyomo.contrib.gdpopt.discrete_algorithm_base_class import _GDPoptDiscreteAlgorithm
+from pyomo.contrib.gdpopt.discrete_search_enums import DirectionNorm, SearchPhase
 from pyomo.contrib.gdpopt.create_oa_subproblems import (
     add_util_block,
     add_disjunction_list,
@@ -32,65 +27,9 @@ from pyomo.contrib.gdpopt.config_options import (
     _add_nlp_solve_configs,
 )
 from pyomo.contrib.gdpopt.nlp_initialization import restore_vars_to_original_values
-from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
-from pyomo.contrib.satsolver.satsolver import satisfiable
-from pyomo.core import maximize, minimize, Suffix, TransformationFactory, Objective, value
+from pyomo.contrib.gdpopt.util import get_main_elapsed_time
+from pyomo.core import maximize, Suffix, TransformationFactory
 from pyomo.opt import SolverFactory
-from pyomo.opt import TerminationCondition as tc
-from pyomo.core.expr.logical_expr import ExactlyExpression
-
-
-class DirectionNorm(str, enum.Enum):
-    """
-    Norm type for search direction generation in LD-SDA.
-
-    Attributes
-    ----------
-    L2 : str
-        Standard basis vectors (2n directions for n external variables).
-    Linf : str
-        All combinations of {-1, 0, 1} excluding the zero vector (3^n - 1 directions).
-    """
-
-    L2 = 'L2'
-    Linf = 'Linf'
-
-    def __str__(self):
-        return self.value
-
-
-class SearchPhase(str, enum.Enum):
-    """
-    Phase of the LD-SDA search algorithm.
-
-    Attributes
-    ----------
-    INITIAL : str
-        Initial point evaluation.
-    NEIGHBOR : str
-        Neighbor search phase.
-    LINE : str
-        Line search phase.
-    """
-
-    INITIAL = 'Initial point'
-    NEIGHBOR = 'Neighbor search'
-    LINE = 'Line search'
-
-    def __str__(self):
-        return self.value
-
-
-# Data tuple for external variables.
-ExternalVarInfo = namedtuple(
-    'ExternalVarInfo',
-    [
-        'exactly_number',  # number of external variables for this type
-        'Boolean_vars',  # list with names of the ordered Boolean variables to be reformulated
-        'UB',  # upper bound on external variable
-        'LB',  # lower bound on external variable
-    ],
-)
 
 
 @SolverFactory.register(
@@ -98,7 +37,7 @@ ExternalVarInfo = namedtuple(
     doc="The LD-SDA (Logic-based Discrete-Steepest Descent Algorithm) "
     "Generalized Disjunctive Programming (GDP) solver",
 )
-class GDP_LDSDA_Solver(_GDPoptAlgorithm):
+class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
     """
     The GDPopt (Generalized Disjunctive Programming optimizer) LD-SDA
     (Logic-based Discrete-Steepest Descent Algorithm) solver.
@@ -159,7 +98,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         )
         self.best_direction = None
         self.current_point = tuple(config.starting_point)
-        self.explored_point_set = set()
 
         # Create utility block on the original model so that we will be able to
         # copy solutions between
@@ -178,7 +116,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         TransformationFactory('core.logical_to_linear').apply_to(self.working_model)
         # Now that logical_to_disjunctive has been called.
         add_transformed_boolean_variable_list(self.working_model_util_block)
-        self.get_external_information(self.working_model_util_block, config)
+        self._get_external_information(self.working_model_util_block, config)
         self.directions = self._get_directions(
             self.number_of_external_variables, config
         )
@@ -193,6 +131,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             self.current_point, SearchPhase.INITIAL, config
         )
 
+        # Initialize path tracking with the starting point
+        self._path = [tuple(self.current_point)]
+
         # Main loop
         locally_optimal = False
         while not locally_optimal:
@@ -202,6 +143,9 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             locally_optimal = self.neighbor_search(config)
             if not locally_optimal:
                 self.line_search(config)
+
+        # Log the search path at termination
+        logger.info("Search path: %s", " -> ".join(map(str, self._path)))
 
     def any_termination_criterion_met(self, config):
         """
@@ -219,281 +163,6 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
             False otherwise.
         """
         return self.reached_iteration_limit(config) or self.reached_time_limit(config)
-
-    def _solve_GDP_subproblem(self, external_var_value, search_type, config):
-        """
-        Solve the GDP subproblem with disjunctions fixed according to the external variable values.
-
-        This method fixes the Boolean variables based on the `external_var_value`,
-        applies necessary transformations (BigM, FBBT), and solves the resulting
-        MINLP/NLP using the configured solver.
-
-        Parameters
-        ----------
-        external_var_value : tuple or list
-            The values of the external variables (indices of active disjuncts)
-            defining the current point in the discrete space.
-        search_type : SearchPhase
-            The context of the solve (SearchPhase.INITIAL, SearchPhase.NEIGHBOR, or SearchPhase.LINE).
-        config : ConfigBlock
-            The configuration block containing solver options.
-
-        Returns
-        -------
-        primal_improved : bool
-            True if the solution of this subproblem improved the best known
-            primal bound (incumbent).
-        primal_bound : float
-            The objective value (primal bound) obtained from the subproblem.
-            Returns None if the subproblem was infeasible or the solve did not
-            produce a usable result.
-        """
-        self.fix_disjunctions_with_external_var(external_var_value)
-        subproblem = self.working_model.clone()
-        TransformationFactory('core.logical_to_linear').apply_to(subproblem)
-
-        with SuppressInfeasibleWarning():
-            try:
-                TransformationFactory('gdp.bigm').apply_to(subproblem)
-                fbbt(subproblem, integer_tol=config.integer_tolerance)
-                TransformationFactory('contrib.detect_fixed_vars').apply_to(subproblem)
-                TransformationFactory('contrib.propagate_fixed_vars').apply_to(
-                    subproblem
-                )
-                TransformationFactory(
-                    'contrib.deactivate_trivial_constraints'
-                ).apply_to(subproblem, tmp=False, ignore_infeasible=False)
-            except InfeasibleConstraintException:
-                return False, None
-            minlp_args = dict(config.minlp_solver_args)
-            if config.time_limit is not None and config.minlp_solver == 'gams':
-                elapsed = get_main_elapsed_time(self.timing)
-                remaining = max(config.time_limit - elapsed, 1)
-                minlp_args['add_options'] = minlp_args.get('add_options', [])
-                minlp_args['add_options'].append('option reslim=%s;' % remaining)
-            result = SolverFactory(config.minlp_solver).solve(subproblem, **minlp_args)
-            primal_improved = self._handle_subproblem_result(
-                result, subproblem, external_var_value, config, search_type
-            )
-
-            successful_termination_conditions = {
-                tc.optimal,
-                tc.feasible,
-                tc.globallyOptimal,
-                tc.locallyOptimal,
-                tc.maxTimeLimit,
-                tc.maxIterations,
-                tc.maxEvaluations,
-            }
-            termination_condition = (
-                None if result is None else result.solver.termination_condition
-            )
-            solve_successful = (
-                termination_condition in successful_termination_conditions
-            )
-
-            if solve_successful:
-                primal_bound = (
-                    result.problem.upper_bound
-                    if self.objective_sense == minimize
-                    else result.problem.lower_bound
-                )
-                if primal_bound is None:
-                    try:
-                        obj = next(
-                            subproblem.component_data_objects(Objective, active=True)
-                        )
-                        primal_bound = value(obj)
-                    except Exception:
-                        primal_bound = None
-                if primal_bound is None or not math.isfinite(primal_bound):
-                    primal_bound = None
-            else:
-                primal_bound = None
-        # Sanity check: an indicated improvement should be accompanied by a valid
-        # primal bound. Warn if this consistency check fails.
-        if primal_improved and primal_bound is None:
-            config.logger.warning(
-                "Subproblem solve indicated an improvement, but no valid primal bound "
-                "was extracted. This may indicate an issue with the subproblem solve "
-                "or the bound extraction logic."
-            )
-        return primal_improved, primal_bound
-
-    def get_external_information(self, util_block, config):
-        """
-        Extract information from the model to perform the reformulation with external variables.
-
-        Identifies logical constraints (specifically `ExactlyExpression`) or
-        disjunctions to map them to external integer variables used for the
-        discrete search.
-
-        Parameters
-        ----------
-        util_block : Block
-            The GDPopt utility block of the model where metadata is stored.
-        config : ConfigBlock
-            The configuration block containing logical constraint or disjunction lists.
-
-        Raises
-        ------
-        ValueError
-            If a logical constraint is not an `ExactlyExpression`.
-            If an `Exactly(N)` constraint has N > 1.
-            If the length of the starting point does not match the number of
-            external variables derived.
-        """
-        util_block.external_var_info_list = []
-        model = util_block.parent_block()
-        reformulation_summary = []
-        # Identify the variables that can be reformulated by performing a loop over logical constraints
-        # TODO: we can automatically find all Exactly logical constraints in the model.
-        # However, we cannot link the starting point and the logical constraint.
-        # for c in util_block.logical_constraint_list:
-        #     if isinstance(c.body, ExactlyExpression):
-        if config.logical_constraint_list is not None:
-            for c in util_block.config_logical_constraint_list:
-                if not isinstance(c.body, ExactlyExpression):
-                    raise ValueError(
-                        "The logical_constraint_list config should be a list of ExactlyExpression logical constraints."
-                    )
-                # TODO: in the first version, we don't support more than one exactly constraint.
-                exactly_number = c.body.args[0]
-                if exactly_number > 1:
-                    raise ValueError("The function only works for exactly_number = 1")
-                sorted_boolean_var_list = c.body.args[1:]
-                util_block.external_var_info_list.append(
-                    ExternalVarInfo(
-                        exactly_number=1,
-                        Boolean_vars=sorted_boolean_var_list,
-                        UB=len(sorted_boolean_var_list),
-                        LB=1,
-                    )
-                )
-                reformulation_summary.append(
-                    [
-                        1,
-                        len(sorted_boolean_var_list),
-                        [boolean_var.name for boolean_var in sorted_boolean_var_list],
-                    ]
-                )
-        if config.disjunction_list is not None:
-            for disjunction in util_block.config_disjunction_list:
-                sorted_boolean_var_list = [
-                    disjunct.indicator_var for disjunct in disjunction.disjuncts
-                ]
-                util_block.external_var_info_list.append(
-                    ExternalVarInfo(
-                        exactly_number=1,
-                        Boolean_vars=sorted_boolean_var_list,
-                        UB=len(sorted_boolean_var_list),
-                        LB=1,
-                    )
-                )
-                reformulation_summary.append(
-                    [
-                        1,
-                        len(sorted_boolean_var_list),
-                        [boolean_var.name for boolean_var in sorted_boolean_var_list],
-                    ]
-                )
-        config.logger.info("Reformulation Summary:")
-        config.logger.info("  Index | Ext Var | LB | UB | Associated Boolean Vars")
-        for idx, row in enumerate(reformulation_summary):
-            config.logger.info(f"  {idx} | {row[0]} | {row[1]} | {row[2]}")
-        self.number_of_external_variables = sum(
-            external_var_info.exactly_number
-            for external_var_info in util_block.external_var_info_list
-        )
-        if self.number_of_external_variables != len(config.starting_point):
-            raise ValueError(
-                "The length of the provided starting point doesn't equal the number of disjunctions."
-            )
-
-    def fix_disjunctions_with_external_var(self, external_var_values_list):
-        """
-        Fix the disjunctions in the working model based on external variable values.
-
-        Maps the integer values in `external_var_values_list` to the corresponding
-        Boolean variables in the model, fixing the selected one to True and
-        others to False for each logical group.
-
-        Parameters
-        ----------
-        external_var_values_list : list or tuple
-            The list of integer values representing the active disjunct index
-            for each external variable.
-        """
-        for external_variable_value, external_var_info in zip(
-            external_var_values_list,
-            self.working_model_util_block.external_var_info_list,
-        ):
-            for idx, boolean_var in enumerate(external_var_info.Boolean_vars):
-                if idx == external_variable_value - 1:
-                    boolean_var.fix(True)
-                    if boolean_var.get_associated_binary() is not None:
-                        boolean_var.get_associated_binary().fix(1)
-                else:
-                    boolean_var.fix(False)
-                    if boolean_var.get_associated_binary() is not None:
-                        boolean_var.get_associated_binary().fix(0)
-        self.explored_point_set.add(tuple(external_var_values_list))
-
-    def _get_directions(self, dimension, config):
-        """
-        Generate the search directions for the given dimension.
-
-        Parameters
-        ----------
-        dimension : int
-            The dimensionality of the neighborhood (number of external variables).
-        config : ConfigBlock
-            The configuration block specifying the norm ('L2' or 'Linf').
-
-        Returns
-        -------
-        list of tuple
-            A list of direction vectors (tuples).
-            - If DirectionNorm.L2: Standard basis vectors and their negatives.
-            - If DirectionNorm.Linf: All combinations of {-1, 0, 1} excluding the zero vector.
-        """
-        if config.direction_norm == DirectionNorm.L2:
-            directions = []
-            for i in range(dimension):
-                directions.append(tuple([0] * i + [1] + [0] * (dimension - i - 1)))
-                directions.append(tuple([0] * i + [-1] + [0] * (dimension - i - 1)))
-            return directions
-        elif config.direction_norm == DirectionNorm.Linf:
-            directions = list(it.product([-1, 0, 1], repeat=dimension))
-            directions.remove((0,) * dimension)  # Remove the zero direction
-            return directions
-
-    def _check_valid_neighbor(self, neighbor):
-        """
-        Check if a given neighbor point is valid.
-
-        A neighbor is valid if it has not been explored yet and lies within
-        the defined bounds (LB and UB) of the external variables.
-
-        Parameters
-        ----------
-        neighbor : tuple
-            The coordinates of the neighbor point to check.
-
-        Returns
-        -------
-        bool
-            True if the neighbor is valid (unexplored and within bounds),
-            False otherwise.
-        """
-        if neighbor in self.explored_point_set:
-            return False
-        return all(
-            external_var_info.LB <= external_var_value <= external_var_info.UB
-            for external_var_value, external_var_info in zip(
-                neighbor, self.working_model_util_block.external_var_info_list
-            )
-        )
 
     def neighbor_search(self, config):
         """
@@ -568,6 +237,7 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
         if not locally_optimal:
             self.current_point = best_neighbor
             self.current_obj = current_obj
+            self._path.append(self.current_point)
 
         return locally_optimal
 
@@ -594,107 +264,8 @@ class GDP_LDSDA_Solver(_GDPoptAlgorithm):
                 if primal_improved and primal_bound is not None:
                     self.current_point = next_point
                     self.current_obj = primal_bound
+                    self._path.append(self.current_point)
                 else:
                     break
             else:
                 break
-
-    def _handle_subproblem_result(
-        self, subproblem_result, subproblem, external_var_value, config, search_type
-    ):
-        """
-        Process the result of a subproblem solve.
-
-        Checks termination conditions, updates primal bounds if valid, and
-        logs the state.
-
-        Parameters
-        ----------
-        subproblem_result : SolverResults
-            The result object returned by the solver.
-        subproblem : ConcreteModel
-            The subproblem model instance.
-        external_var_value : tuple
-            The external variable configuration used for this subproblem.
-        config : ConfigBlock
-            The configuration block.
-        search_type : SearchPhase
-            The type of search (SearchPhase.NEIGHBOR, etc.).
-
-        Returns
-        -------
-        bool
-            True if the result improved the current best primal bound,
-            False otherwise.
-        """
-        if subproblem_result is None:
-            return False
-        if subproblem_result.solver.termination_condition in {
-            tc.optimal,
-            tc.feasible,
-            tc.globallyOptimal,
-            tc.locallyOptimal,
-            tc.maxTimeLimit,
-            tc.maxIterations,
-            tc.maxEvaluations,
-        }:
-            primal_bound = (
-                subproblem_result.problem.upper_bound
-                if self.objective_sense == minimize
-                else subproblem_result.problem.lower_bound
-            )
-            primal_improved = self._update_bounds_after_solve(
-                search_type,
-                primal=primal_bound,
-                logger=config.logger,
-                current_point=external_var_value,
-            )
-            if primal_improved:
-                self.update_incumbent(
-                    subproblem.component(self.original_util_block.name)
-                )
-            return primal_improved
-        return False
-
-    def _log_header(self, logger):
-        logger.info(
-            '================================================================='
-            '===================================='
-        )
-        logger.info(
-            '{:^9} | {:^15} | {:^20} | {:^11} | {:^11} | {:^8} | {:^7}\n'.format(
-                'Iteration',
-                'Search Type',
-                'External Variables',
-                'Lower Bound',
-                'Upper Bound',
-                'Gap',
-                'Time(s)',
-            )
-        )
-
-    def _log_current_state(
-        self, logger, search_type, current_point, primal_improved=False
-    ):
-        star = "*" if primal_improved else ""
-        logger.info(
-            self.log_formatter.format(
-                self.iteration,
-                search_type,
-                str(current_point),
-                self.LB,
-                self.UB,
-                self.relative_gap(),
-                get_main_elapsed_time(self.timing),
-                star,
-            )
-        )
-
-    def _update_bounds_after_solve(
-        self, search_type, primal=None, dual=None, logger=None, current_point=None
-    ):
-        primal_improved = self._update_bounds(primal, dual)
-        if logger is not None:
-            self._log_current_state(logger, search_type, current_point, primal_improved)
-
-        return primal_improved

@@ -82,6 +82,7 @@ class TestLDSDALinearSearchUnit(unittest.TestCase):
         # 2. Set up the fake internal state required for line_search
         solver.current_point = (0, 0)
         solver.best_direction = (1, 1)
+        solver._path = []  # Initialize path tracking
 
         # 3. Mock the internal methods
         # check_valid_neighbor: Always say the neighbor is valid
@@ -140,7 +141,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver.any_termination_criterion_met = MagicMock(return_value=True)
         self.solver.neighbor_search = MagicMock()
         # 2. Mock internal setup methods
-        self.solver.get_external_information = MagicMock()
+        self.solver._get_external_information = MagicMock()
         self.solver._get_directions = MagicMock(return_value=[])
 
         # 3. FIX: Manually set the attribute that _get_external_information would have set
@@ -170,7 +171,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "should be a list of ExactlyExpression"
         ):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_exactly_number_greater_than_one(self):
         """
@@ -187,7 +188,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_logical_constraint_list = [self.model.lc]
 
         with self.assertRaisesRegex(ValueError, "only works for exactly_number = 1"):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_starting_point_mismatch(self):
         """
@@ -208,7 +209,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "length of the provided starting point"
         ):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_disjunction_list_processing(self):
         """
@@ -226,7 +227,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_disjunction_list = [self.model.disj]
         self.config.starting_point = [1]  # Correct length
 
-        self.solver.get_external_information(self.model.util_block, self.config)
+        self.solver._get_external_information(self.model.util_block, self.config)
 
         # Verify it processed the disjunction
         self.assertEqual(len(self.model.util_block.external_var_info_list), 1)
@@ -251,6 +252,7 @@ class TestLDSDAUnits(unittest.TestCase):
         # 1. (1, 0) - Distance 1
         # 2. (1, 1) - Distance sqrt(2) (further away)
         self.solver.directions = [(1, 0), (1, 1)]
+        self.solver._path = []  # Initialize path tracking
         self.solver._check_valid_neighbor = MagicMock(return_value=True)
 
         # Mock subproblems to return IDENTICAL objectives
@@ -276,6 +278,7 @@ class TestLDSDAUnits(unittest.TestCase):
 
         self.config.bound_tolerance = 1e-6
         self.solver.directions = [(1, 0), (1, 1)]
+        self.solver._path = []  # Initialize path tracking
         self.solver._check_valid_neighbor = MagicMock(return_value=True)
 
         # Under maximization, the (1,1) neighbor should be preferred due to larger objective
