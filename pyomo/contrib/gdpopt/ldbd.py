@@ -271,20 +271,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                             else:
                                 use_best = best_obj > next_point_obj
                             if use_best:
-                                # Check if best_point is already an anchor
-                                if best_point in self._anchors:
-                                    logger.info("Master stalled and best point is already an anchor. Terminating.")
-                                    # Terminate the loop organically without faking the bounds
-                                    self.pyomo_results.solver.termination_condition = tc.optimal 
-                                    break
-                                else:
-                                    next_point = best_point
-                                    # Incumbent values are normally captured when a point is solved.
-                                    # Since we are switching to an already-solved best point here,
-                                    # reload the incumbent buffers from the cached solution.
-                                    self._load_incumbent_from_solution_cache(
-                                        best_point, logger=logger
-                                    )
+                                next_point = best_point
+                                # Incumbent values are normally captured when a point is solved.
+                                # Since we are switching to an already-solved best point here,
+                                # reload the incumbent buffers from the cached solution.
+                                self._load_incumbent_from_solution_cache(
+                                    best_point, logger=logger
+                                )
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
@@ -305,6 +298,13 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
             if self.current_point not in self._anchors:
                 self._anchors.append(self.current_point)
+            else:
+                # Check if best_point is already an anchor
+                logger.info("Master stalled and best point is already an anchor. Terminating.")
+                # Terminate the loop organically without faking the bounds
+                self.pyomo_results.solver.termination_condition = tc.optimal 
+                break
+                                
 
         # Ensure the final incumbent corresponds to the best feasible point.
         # If the cache is unavailable (e.g., in unit tests that mock subproblem
