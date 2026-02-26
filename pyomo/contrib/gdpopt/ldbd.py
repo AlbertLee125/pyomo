@@ -627,17 +627,17 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 cut_idx = cut_obj.index()
                 self._cut_indices[anchor] = cut_idx
 
-    # def any_termination_criterion_met(self, config):
-    #     """Check whether any termination criterion is satisfied.
+    def any_termination_criterion_met(self, config):
+        """Check whether any termination criterion is satisfied.
 
-    #     Parameters
-    #     ----------
-    #     config : ConfigBlock
-    #         GDPopt configuration block.
+        Parameters
+        ----------
+        config : ConfigBlock
+            GDPopt configuration block.
 
-    #     Returns
-    #     -------
-    #     bool
-    #         ``True`` if the solver should terminate.
-    #     """
-    #     return self.reached_iteration_limit(config) or self.reached_time_limit(config)
+        Returns
+        -------
+        bool
+            ``True`` if the solver should terminate.
+        """
+        return self.reached_iteration_limit(config) or self.reached_time_limit(config)
