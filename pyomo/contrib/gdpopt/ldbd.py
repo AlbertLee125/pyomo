@@ -302,6 +302,9 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 # Check if best_point is already an anchor
                 logger.info("Master stalled and best point is already an anchor. Terminating.")
                 # Terminate the loop organically without faking the bounds
+                logger.info("LDBD bounds converged: UB=%s, LB=%s", self.UB, self.LB)
+                logger.info("Search path: %s", " -> ".join(map(str, self._path)))
+                logger.info("Anchor points: %s", " -> ".join(map(str, self._anchors)))
                 self.pyomo_results.solver.termination_condition = tc.optimal 
                 break
                                 
