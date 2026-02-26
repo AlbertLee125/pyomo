@@ -271,13 +271,20 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                             else:
                                 use_best = best_obj > next_point_obj
                             if use_best:
-                                next_point = best_point
-                                # Incumbent values are normally captured when a point is solved.
-                                # Since we are switching to an already-solved best point here,
-                                # reload the incumbent buffers from the cached solution.
-                                self._load_incumbent_from_solution_cache(
-                                    best_point, logger=logger
-                                )
+                                # Check if best_point is already an anchor
+                                if best_point in self._anchors:
+                                    logger.info("Master stalled and best point is already an anchor. Terminating.")
+                                    # Terminate the loop organically without faking the bounds
+                                    self.pyomo_results.solver.termination_condition = tc.optimal 
+                                    break
+                                else:
+                                    next_point = best_point
+                                    # Incumbent values are normally captured when a point is solved.
+                                    # Since we are switching to an already-solved best point here,
+                                    # reload the incumbent buffers from the cached solution.
+                                    self._load_incumbent_from_solution_cache(
+                                        best_point, logger=logger
+                                    )
 
             self.current_point = tuple(next_point)
             # Update the path with the new current point (even if it is a repeat).
@@ -384,7 +391,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
     def _solve_master(self, config):
         """Solve the LD-BD master MILP.
 
-        Implements Step 5 in Algorithm \ref{alg:main_ldbd} (Master Problem
+        Implements Step 5 in Algorithm (Master Problem
         Solution):
 
             (z_LB, e^k) = argmin z
@@ -620,17 +627,17 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 cut_idx = cut_obj.index()
                 self._cut_indices[anchor] = cut_idx
 
-    def any_termination_criterion_met(self, config):
-        """Check whether any termination criterion is satisfied.
+    # def any_termination_criterion_met(self, config):
+    #     """Check whether any termination criterion is satisfied.
 
-        Parameters
-        ----------
-        config : ConfigBlock
-            GDPopt configuration block.
+    #     Parameters
+    #     ----------
+    #     config : ConfigBlock
+    #         GDPopt configuration block.
 
-        Returns
-        -------
-        bool
-            ``True`` if the solver should terminate.
-        """
-        return self.reached_iteration_limit(config) or self.reached_time_limit(config)
+    #     Returns
+    #     -------
+    #     bool
+    #         ``True`` if the solver should terminate.
+    #     """
+    #     return self.reached_iteration_limit(config) or self.reached_time_limit(config)

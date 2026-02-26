@@ -108,3 +108,8 @@ following terms and conditions for your contributions:
 ### Related Packages
 
 See https://pyomo.readthedocs.io/en/latest/related_packages.html.
+
+---
+**License**
+
+This project is licensed under the terms of the [LICENSE.md](LICENSE.md) file in this repository.
