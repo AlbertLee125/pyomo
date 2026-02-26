@@ -188,6 +188,11 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         # Solve/register the initial point
         _ = self._solve_discrete_point(self.current_point, SearchPhase.INITIAL, config)
 
+        # Check if the initial point is feasible. If not, we cannot proceed.
+        initial_info = self.data_manager.get_info(self.current_point)
+        if initial_info is None or initial_info.get("feasible", False) is False:
+            logger.warning("Initial point is infeasible.")
+
         # Build the master (Step 5 model) once we know the external variable
         # structure.
         self._build_master(config)
