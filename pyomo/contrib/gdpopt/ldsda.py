@@ -128,7 +128,7 @@ class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
             self.working_model_util_block.BigM = Suffix()
         self._log_header(logger)
         # Solve the initial point
-        _, self.current_obj = self._solve_GDP_subproblem(
+        _, self.current_obj = self._solve_discrete_point(
             self.current_point, SearchPhase.INITIAL, config
         )
 
@@ -217,7 +217,7 @@ class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
             # Check if the neighbor is valid
             if self._check_valid_neighbor(neighbor):
                 # Solve the subproblem for this neighbor
-                primal_improved, primal_bound = self._solve_GDP_subproblem(
+                primal_improved, primal_bound = self._solve_discrete_point(
                     neighbor, SearchPhase.NEIGHBOR, config
                 )
 
@@ -270,7 +270,7 @@ class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
             next_point = tuple(map(sum, zip(self.current_point, self.best_direction)))
             if self._check_valid_neighbor(next_point):
                 # Unpack the tuple and use only the first boolean value
-                primal_improved, primal_bound = self._solve_GDP_subproblem(
+                primal_improved, primal_bound = self._solve_discrete_point(
                     next_point, SearchPhase.LINE, config
                 )
                 if primal_improved and primal_bound is not None:
