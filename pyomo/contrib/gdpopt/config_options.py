@@ -531,44 +531,36 @@ def _add_tolerance_configs(CONFIG):
     )
 
 
-def _add_ldsda_configs(CONFIG):
-    CONFIG.declare(
-        "direction_norm",
-        ConfigValue(
-            default='L2',
-            domain=In(['L2', 'Linf']),
-            description="The norm to use for the search direction",
-        ),
-    )
-    CONFIG.declare(
-        "starting_point",
-        ConfigValue(default=None, description="The value list of external variables."),
-    )
-    CONFIG.declare(
-        "logical_constraint_list",
-        ConfigValue(
-            default=None,
-            domain=ComponentDataSet(LogicalConstraint),
-            description="""
-            The list of logical constraints to be reformulated into external variables.
-            The logical constraints should be in the same order of provided starting point.
-            The provided logical constraints should be ExactlyExpressions.""",
-        ),
-    )
-    CONFIG.declare(
-        "disjunction_list",
-        ConfigValue(
-            default=None,
-            domain=ComponentDataSet(Disjunction),
-            description="""
-            The list of disjunctions to be reformulated into external variables.
-            The disjunctions should be in the same order of provided starting point.
-            """,
-        ),
-    )
+def _add_discrete_algorithm_configs(CONFIG):
+    """Common configuration for discrete-search algorithms (LDSDA, LDBD).
 
-
-def _add_ldbd_configs(CONFIG):
+    This replaces the previous pattern of pulling in the full NLP/MINLP solver
+    configs via ``_add_nlp_solver_configs``.  Discrete algorithms treat the
+    fixed-disjunction subproblem as a generic optimisation problem that may be
+    an NLP *or* an MINLP, so a single ``subproblem_solver`` /
+    ``subproblem_solver_args`` pair is more appropriate than
+    ``minlp_solver`` / ``minlp_solver_args``.
+    """
+    CONFIG.declare(
+        "subproblem_solver",
+        ConfigValue(
+            default="baron",
+            description="""
+            Solver used for the fixed-disjunction subproblems.  The
+            subproblem may be NLP or MINLP depending on the model
+            structure; choose a solver capable of handling both, or
+            use 'mindtpy' as a meta-solver that dispatches internally.""",
+        ),
+    )
+    CONFIG.declare(
+        "subproblem_solver_args",
+        ConfigBlock(
+            description="""
+            Keyword arguments forwarded to the subproblem solver's
+            ``solve()`` invocation.""",
+            implicit=True,
+        ),
+    )
     CONFIG.declare(
         "direction_norm",
         ConfigValue(
@@ -612,6 +604,14 @@ def _add_ldbd_configs(CONFIG):
         ),
     )
 
+
+def _add_ldsda_configs(CONFIG):
+    """LDSDA-specific configs (beyond the common discrete-algorithm configs)."""
+    pass
+
+
+def _add_ldbd_configs(CONFIG):
+    """LDBD-specific configs (beyond the common discrete-algorithm configs)."""
     CONFIG.declare(
         "separation_solver",
         ConfigValue(

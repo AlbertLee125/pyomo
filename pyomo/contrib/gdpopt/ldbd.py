@@ -28,7 +28,7 @@ from pyomo.contrib.gdpopt.create_oa_subproblems import (
     add_transformed_boolean_variable_list,
 )
 from pyomo.contrib.gdpopt.config_options import (
-    _add_nlp_solver_configs,
+    _add_discrete_algorithm_configs,
     _add_ldbd_configs,
     _add_mip_solver_configs,
     _add_tolerance_configs,
@@ -68,7 +68,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
 
     CONFIG = _GDPoptAlgorithm.CONFIG()
     _add_mip_solver_configs(CONFIG)
-    _add_nlp_solver_configs(CONFIG, default_solver="ipopt")
+    _add_discrete_algorithm_configs(CONFIG)
     _add_nlp_solve_configs(
         CONFIG, default_nlp_init_method=restore_vars_to_original_values
     )

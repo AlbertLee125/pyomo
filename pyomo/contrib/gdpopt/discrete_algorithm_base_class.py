@@ -732,38 +732,38 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                     return "nlp"
                 return "lp"
 
-            minlp_args = dict(config.minlp_solver_args)
+            subproblem_args = dict(config.subproblem_solver_args)
 
             # Solver routing:
-            # - If the user selected MindtPy as the MINLP meta-solver, only use
-            #   it for true MINLPs (discrete + nonlinear). For NLP / LP / MIP
-            #   subproblems, solve directly with the configured nlp_solver / mip_solver.
+            # - If the user selected MindtPy as the subproblem meta-solver, only
+            #   use it for true MINLPs (discrete + nonlinear). For NLP / LP / MIP
+            #   subproblems, solve directly with the configured subsolver.
             # - For direct solvers, call the configured solver and ensure primal
             #   values are loaded onto the model.
-            if config.minlp_solver == "mindtpy":
+            if config.subproblem_solver == "mindtpy":
                 problem_class = _classify_algebraic_model(subproblem)
 
                 if problem_class in {"lp", "mip"}:
-                    mip_solver = minlp_args.get("mip_solver", None)
+                    mip_solver = subproblem_args.get("mip_solver", None)
                     if mip_solver is None:
                         raise ValueError(
-                            "gdpopt.ldbd with minlp_solver='mindtpy' requires "
-                            "minlp_solver_args['mip_solver'] to solve LP/MIP subproblems."
+                            "subproblem_solver='mindtpy' requires "
+                            "subproblem_solver_args['mip_solver'] to solve LP/MIP subproblems."
                         )
-                    mip_args = dict(minlp_args.get("mip_solver_args", {}))
+                    mip_args = dict(subproblem_args.get("mip_solver_args", {}))
                     mip_args.setdefault("load_solutions", True)
                     sub_results = SolverFactory(mip_solver).solve(
                         subproblem, **mip_args
                     )
 
                 elif problem_class == "nlp":
-                    nlp_solver = minlp_args.get("nlp_solver", None)
+                    nlp_solver = subproblem_args.get("nlp_solver", None)
                     if nlp_solver is None:
                         raise ValueError(
-                            "gdpopt.ldbd with minlp_solver='mindtpy' requires "
-                            "minlp_solver_args['nlp_solver'] to solve NLP subproblems."
+                            "subproblem_solver='mindtpy' requires "
+                            "subproblem_solver_args['nlp_solver'] to solve NLP subproblems."
                         )
-                    nlp_args = dict(minlp_args.get("nlp_solver_args", {}))
+                    nlp_args = dict(subproblem_args.get("nlp_solver_args", {}))
                     nlp_args.setdefault("load_solutions", True)
                     sub_results = SolverFactory(nlp_solver).solve(
                         subproblem, **nlp_args
@@ -771,23 +771,19 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
                 else:
                     # MINLP: use MindtPy as requested
-                    minlp_args.pop("load_solutions", None)
+                    subproblem_args.pop("load_solutions", None)
                     sub_results = SolverFactory("mindtpy").solve(
-                        subproblem, **minlp_args
+                        subproblem, **subproblem_args
                     )
-                    # Best-effort: if MindtPy returned a solution in results,
-                    # try to load it onto the model so incumbent updates and
-                    # objective evaluation can proceed.
                     try:
                         subproblem.solutions.load_from(sub_results)
                     except Exception:
                         pass
 
             else:
-                # For direct solvers, ensure solutions are loaded onto subproblem
-                minlp_args.setdefault("load_solutions", True)
-                sub_results = SolverFactory(config.minlp_solver).solve(
-                    subproblem, **minlp_args
+                subproblem_args.setdefault("load_solutions", True)
+                sub_results = SolverFactory(config.subproblem_solver).solve(
+                    subproblem, **subproblem_args
                 )
             # Use the results from the solver we actually ran
             result = sub_results

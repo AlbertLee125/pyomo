@@ -58,8 +58,8 @@ class TestGDPoptLDSDA(unittest.TestCase):
             result = SolverFactory('gdpopt.ldsda').solve(
                 model,
                 direction_norm=direction_norm,
-                minlp_solver='gams',
-                minlp_solver_args=dict(solver='ipopth'),
+                subproblem_solver='gams',
+                subproblem_solver_args=dict(solver='ipopth'),
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
@@ -99,8 +99,9 @@ class TestLDSDALinearSearchUnit(unittest.TestCase):
 
         # 4. Run the method
         config = MagicMock()
+        config.infinity_output = 1e6  
+        config.logger = None
         solver.line_search(config)
-
         # 5. Verify results
         # The solver should have moved exactly ONCE (from 0,0 to 1,1)
         self.assertEqual(solver.current_point, (1, 1))
