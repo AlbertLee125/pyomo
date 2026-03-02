@@ -507,6 +507,17 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         self.data_manager.set_external_info(util_block.external_var_info_list)
         config.logger.info("Reformulation Summary:")
         config.logger.info("  Index | Ext Var | LB | UB | Associated Boolean Vars")
+        for idx, (ext_var, ub, boolean_var_names) in enumerate(
+            reformulation_summary, start=1
+        ):
+            config.logger.info(
+                "  %5d | %7d | %2d | %2d | %s",
+                idx,
+                ext_var,
+                1,
+                ub,
+                ", ".join(boolean_var_names),
+            )
         self.number_of_external_variables = sum(
             external_var_info.exactly_number
             for external_var_info in util_block.external_var_info_list
