@@ -33,12 +33,6 @@ def _select_first_available(solver_names):
     return None
 
 
-# NOTE: We intentionally avoid `appsi_highs` here. GDPopt's subproblem clone
-# attaches an IMPORT `dual` suffix, and APPSI's legacy wrapper will attempt to
-# import duals whenever `model.dual.import_enabled()` is true. HiGHS does not
-# provide valid duals for MIP/MILP in general, which can raise at load time.
-# Additionally, APPSI HiGHS raises if asked to load solutions when no feasible
-# solution exists (e.g., unbounded/infeasible), which breaks the unbounded test.
 _MIP_SOLVER = _select_first_available(('appsi_highs', 'glpk', 'cbc'))
 _NLP_SOLVER = 'ipopt'
 

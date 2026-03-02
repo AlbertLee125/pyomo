@@ -465,9 +465,8 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
     def neighbor_search(self, anchor_point, config):
         """Evaluate the neighborhood around an anchor point.
 
-        The anchor itself is always evaluated. If it is feasible (objective
-        strictly less than ``config.infinity_output``), then all neighbors in
-        the configured norm-ball neighborhood are evaluated.
+        The anchor itself is always evaluated. If it is feasible, then all
+        neighbors in the configured norm-ball neighborhood are evaluated.
 
         Parameters
         ----------
@@ -492,7 +491,10 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         _, anchor_obj = self._solve_discrete_point(
             anchor_point, SearchPhase.ANCHOR, config
         )
-        anchor_feasible = anchor_obj < config.infinity_output
+        # Check feasibility from data_manager instead of comparing objective value,
+        # which can fail for maximization or when objective scale exceeds infinity_output
+        anchor_info = self.data_manager.get_info(anchor_point)
+        anchor_feasible = anchor_info is not None and anchor_info.get("feasible", False)
         if not anchor_feasible:
             return False
 
