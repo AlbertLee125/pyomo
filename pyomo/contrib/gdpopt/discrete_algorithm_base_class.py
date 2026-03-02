@@ -18,6 +18,7 @@ from pyomo.core import (
     Constraint,
     Var,
     minimize,
+    maximize,
     TransformationFactory,
     Objective,
     value,
@@ -618,18 +619,17 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         # penalty. When available, infinity_output is used as a finite penalty.
         if primal_bound is None:
             feasible = False
-            objective = (
-                config.infinity_output
-                if hasattr(config, 'infinity_output')
-                else float('inf')
-            )
-        else:
-            objective = primal_bound
             if hasattr(config, 'infinity_output'):
-                # You should make sure infinity_output is large enough
-                feasible = primal_bound < config.infinity_output
+                # Use sign-aware penalty: positive for minimization, negative for maximization.
+                # This ensures infeasible points always look bad regardless of optimization sense.
+                penalty_sign = 1 if self.objective_sense == minimize else -1
+                objective = penalty_sign * config.infinity_output
             else:
-                feasible = True
+                objective = float('inf')
+        else:
+            # Point is feasible if the solver returned a bound
+            feasible = True
+            objective = primal_bound
 
         self.data_manager.add(
             point,
