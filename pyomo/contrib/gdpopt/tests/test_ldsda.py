@@ -99,7 +99,7 @@ class TestLDSDALinearSearchUnit(unittest.TestCase):
 
         # 4. Run the method
         config = MagicMock()
-        config.infinity_output = 1e6  
+        config.infinity_output = 1e6
         config.logger = None
         solver.line_search(config)
         # 5. Verify results

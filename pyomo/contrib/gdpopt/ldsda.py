@@ -149,11 +149,12 @@ class GDP_LDSDA_Solver(_GDPoptDiscreteAlgorithm):
         logger.info("Search path: %s", " -> ".join(map(str, self._path)))
 
         # Stamp locallyOptimal termination if appropriate
-        
+
         if (
             locally_optimal
             and hasattr(self, "pyomo_results")
-            and getattr(self.pyomo_results.solver, "termination_condition", tc.unknown) == tc.unknown
+            and getattr(self.pyomo_results.solver, "termination_condition", tc.unknown)
+            == tc.unknown
         ):
             self.pyomo_results.solver.termination_condition = tc.locallyOptimal
 

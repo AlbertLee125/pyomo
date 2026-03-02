@@ -144,7 +144,12 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         :meth:`pyomo.contrib.gdpopt.discrete_algorithm_base_class._GDPoptDiscreteAlgorithm._load_incumbent_from_solution_cache`)
         to reload incumbent buffers when the algorithm switches to an
         already-evaluated best point without re-solving.
+
+        Note: The results obtained for the mathematical problem benchmark may differ
+        from those reported in the original paper(Liñán, D. A.; Ricardez‐Sandoval, L. A., 2023) due to differences in
+        algorithm implementation details and solver versions.
         """
+
         logger = config.logger
         self.log_formatter = (
             "{:>9}   {:>15}   {:>20}   {:>11.5f}   {:>11.5f}   {:>8.2%}   {:>7.2f}  {}"
@@ -305,14 +310,15 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 self._anchors.append(self.current_point)
             else:
                 # Check if best_point is already an anchor
-                logger.info("Master stalled and best point is already an anchor. Terminating.")
+                logger.info(
+                    "Master stalled and best point is already an anchor. Terminating."
+                )
                 # Terminate the loop organically without faking the bounds
                 logger.info("LDBD bounds converged: UB=%s, LB=%s", self.UB, self.LB)
                 logger.info("Search path: %s", " -> ".join(map(str, self._path)))
                 logger.info("Anchor points: %s", " -> ".join(map(str, self._anchors)))
-                self.pyomo_results.solver.termination_condition = tc.optimal 
+                self.pyomo_results.solver.termination_condition = tc.optimal
                 break
-                                
 
         # Ensure the final incumbent corresponds to the best feasible point.
         # If the cache is unavailable (e.g., in unit tests that mock subproblem

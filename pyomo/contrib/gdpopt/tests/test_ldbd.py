@@ -93,7 +93,10 @@ class TestGDPoptLDBD(unittest.TestCase):
                 model,
                 direction_norm=direction_norm,
                 subproblem_solver="mindtpy",
-                subproblem_solver_args={"mip_solver": "appsi_highs", "nlp_solver": "ipopt"},
+                subproblem_solver_args={
+                    "mip_solver": "appsi_highs",
+                    "nlp_solver": "ipopt",
+                },
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
