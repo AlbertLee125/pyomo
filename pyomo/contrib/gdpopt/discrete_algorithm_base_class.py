@@ -793,26 +793,6 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             else:
                 subproblem_args.setdefault("load_solutions", True)
-                # For direct GAMS solves, enforce a per-solve time limit so
-                # that a single subproblem does not overrun the overall time
-                # limit. This mirrors the behaviour from the legacy LDSDA
-                # implementation, which set the GAMS "reslim" option based on
-                # the remaining wall-clock time.
-                if (
-                    config.subproblem_solver == "gams"
-                    and getattr(config, "time_limit", None) is not None
-                ):
-                    try:
-                        elapsed = get_main_elapsed_time(config)
-                    except Exception:
-                        elapsed = None
-                    if elapsed is not None:
-                        remaining = max(0.0, config.time_limit - elapsed)
-                        # Only set a per-solve limit if there is remaining
-                        # time. Respect any user-provided reslim setting.
-                        if remaining > 0:
-                            options = subproblem_args.setdefault("options", {})
-                            options.setdefault("reslim", remaining)
                 sub_results = SolverFactory(config.subproblem_solver).solve(
                     subproblem, **subproblem_args
                 )

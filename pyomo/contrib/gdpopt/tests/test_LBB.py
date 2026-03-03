@@ -197,6 +197,12 @@ class TestGDPopt_LBB(unittest.TestCase):
         )
         objective_value = value(model.obj.expr, exception=False)
         self.assertIsNotNone(objective_value)
+        # Assert solution quality is within expected range (~4.46)
+        # Range allows for solver-dependent variations while catching regressions
+        self.assertTrue(
+            3.5 <= objective_value <= 5.5,
+            f"Objective value {objective_value} outside expected range [3.5, 5.5] (expected ~4.46)",
+        )
 
     @unittest.skipUnless(
         large_test_available,
@@ -319,6 +325,12 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
         )
         objective_value = value(model.obj.expr, exception=False)
         self.assertIsNotNone(objective_value)
+        # Assert solution quality is within expected range (~4.46)
+        # Range allows for solver-dependent variations while catching regressions
+        self.assertTrue(
+            3.5 <= objective_value <= 5.5,
+            f"Objective value {objective_value} outside expected range [3.5, 5.5] (expected ~4.46)",
+        )
 
 
 if __name__ == '__main__':
