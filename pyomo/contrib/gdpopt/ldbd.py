@@ -491,10 +491,14 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         _, anchor_obj = self._solve_discrete_point(
             anchor_point, SearchPhase.ANCHOR, config
         )
-        # Check feasibility from data_manager instead of comparing objective value,
-        # which can fail for maximization or when objective scale exceeds infinity_output
-        anchor_info = self.data_manager.get_info(anchor_point)
-        anchor_feasible = anchor_info is not None and anchor_info.get("feasible", False)
+        # Check feasibility using sign-aware penalty comparison.
+        # For minimization: infeasible penalty is +infinity_output, so check if < infinity_output
+        # For maximization: infeasible penalty is -infinity_output, so check if > -infinity_output
+        if self.objective_sense == maximize:
+            anchor_feasible = anchor_obj > -config.infinity_output
+        else:
+            anchor_feasible = anchor_obj < config.infinity_output
+        
         if not anchor_feasible:
             return False
 
