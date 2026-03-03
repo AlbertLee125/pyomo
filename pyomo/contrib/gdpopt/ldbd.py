@@ -460,7 +460,20 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         # original minimization objective.
         # We cannot guarantee that the master objective improves monotonically as we refine cuts,
         self._update_bounds(dual=z_lb, force_update=True)
-        next_point = tuple(int(round(value(master.e[i]))) for i in master.e)
+        next_point_values = []
+        for i in master.e:
+            # Use exception=False to safely check if the solver returned a value
+            val = value(master.e[i], exception=False)
+            if val is None:
+                # If e[i] was not generated in the LP/MIP (coeff 0 in all cuts), use LB as fallback
+                val = master.e[i].lb
+                if val is None:  # Fallback safety
+                    val = 0
+            next_point_values.append(int(round(val)))
+
+        next_point = tuple(next_point_values)
+
+        # next_point = tuple(int(round(value(master.e[i]))) for i in master.e)
         return z_lb, next_point
 
     def neighbor_search(self, anchor_point, config):
@@ -495,10 +508,8 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         # Check feasibility using sign-aware penalty comparison.
         # For minimization: infeasible penalty is +infinity_output, so check if < infinity_output
         # For maximization: infeasible penalty is -infinity_output, so check if > -infinity_output
-        if self.objective_sense == maximize:
-            anchor_feasible = anchor_obj > -config.infinity_output
-        else:
-            anchor_feasible = anchor_obj < config.infinity_output
+        info = self.data_manager.get_info(anchor_point)
+        anchor_feasible = bool(info and info.get("feasible"))
 
         if not anchor_feasible:
             return False
