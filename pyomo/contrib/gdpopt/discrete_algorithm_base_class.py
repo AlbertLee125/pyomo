@@ -13,6 +13,7 @@ from pyomo.common.errors import InfeasibleConstraintException
 from pyomo.contrib.fbbt.fbbt import fbbt
 
 from pyomo.contrib.gdpopt.algorithm_base_class import _GDPoptAlgorithm
+from pyomo.contrib.gdpopt.solve_subproblem import configure_and_call_solver
 from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, get_main_elapsed_time
 from pyomo.core import (
     Constraint,
@@ -25,7 +26,6 @@ from pyomo.core import (
 )
 from pyomo.core.base import ComponentUID
 from pyomo.core.expr.visitor import polynomial_degree
-from pyomo.opt import SolverFactory
 from pyomo.opt import TerminationCondition as tc
 from pyomo.core.expr.logical_expr import ExactlyExpression
 from pyomo.contrib.gdpopt.create_oa_subproblems import (
@@ -752,6 +752,8 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             subproblem_args = dict(config.subproblem_solver_args)
 
+            config.call_before_subproblem_solve(self, subproblem, sub_util)
+
             # Solver routing:
             # - If the user selected MindtPy as the subproblem meta-solver, only
             #   use it for true MINLPs (discrete + nonlinear). For NLP / LP / MIP
@@ -770,8 +772,13 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                         )
                     mip_args = dict(subproblem_args.get("mip_solver_args", {}))
                     mip_args.setdefault("load_solutions", True)
-                    sub_results = SolverFactory(mip_solver).solve(
-                        subproblem, **mip_args
+                    sub_results = configure_and_call_solver(
+                        subproblem,
+                        mip_solver,
+                        mip_args,
+                        'MIP',
+                        self.timing,
+                        config.time_limit,
                     )
 
                 elif problem_class == "nlp":
@@ -783,15 +790,25 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
                         )
                     nlp_args = dict(subproblem_args.get("nlp_solver_args", {}))
                     nlp_args.setdefault("load_solutions", True)
-                    sub_results = SolverFactory(nlp_solver).solve(
-                        subproblem, **nlp_args
+                    sub_results = configure_and_call_solver(
+                        subproblem,
+                        nlp_solver,
+                        nlp_args,
+                        'NLP',
+                        self.timing,
+                        config.time_limit,
                     )
 
                 else:
                     # MINLP: use MindtPy as requested
                     subproblem_args.pop("load_solutions", None)
-                    sub_results = SolverFactory("mindtpy").solve(
-                        subproblem, **subproblem_args
+                    sub_results = configure_and_call_solver(
+                        subproblem,
+                        "mindtpy",
+                        subproblem_args,
+                        'MINLP',
+                        self.timing,
+                        config.time_limit,
                     )
                     try:
                         subproblem.solutions.load_from(sub_results)
@@ -800,9 +817,16 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
 
             else:
                 subproblem_args.setdefault("load_solutions", True)
-                sub_results = SolverFactory(config.subproblem_solver).solve(
-                    subproblem, **subproblem_args
+                sub_results = configure_and_call_solver(
+                    subproblem,
+                    config.subproblem_solver,
+                    subproblem_args,
+                    'Subproblem',
+                    self.timing,
+                    config.time_limit,
                 )
+
+            config.call_after_subproblem_solve(self, subproblem, sub_util)
             # Use the results from the solver we actually ran
             result = sub_results
 
