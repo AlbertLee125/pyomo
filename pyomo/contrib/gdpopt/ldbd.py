@@ -452,13 +452,15 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             config.logger.debug("Master MILP did not converge: %s", term_cond)
             return None, None
 
-        z_lb = value(master.z)
+        z_master = value(master.z)
         # Update the dual bound using the base bound logic (monotone in the
         # correct direction for the objective sense).
-        # In the LD-BD case, the master objective is a lower bound on the
-        # original minimization objective.
-        # We cannot guarantee that the master objective improves monotonically as we refine cuts,
-        self._update_bounds(dual=z_lb, force_update=True)
+        # In the LD-BD case, the master objective is a lower bound for
+        # minimization and an upper bound for maximization.
+        # We cannot guarantee that the master objective improves monotonically
+        # as we refine cuts.
+        self._update_bounds(dual=z_master, force_update=True)
+        
         next_point_values = []
         for i in master.e:
             # Use exception=False to safely check if the solver returned a value
@@ -473,7 +475,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         next_point = tuple(next_point_values)
 
         # next_point = tuple(int(round(value(master.e[i]))) for i in master.e)
-        return z_lb, next_point
+        return z_master, next_point
 
     def neighbor_search(self, anchor_point, config):
         """Evaluate the neighborhood around an anchor point.
