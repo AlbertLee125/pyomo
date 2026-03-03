@@ -469,9 +469,9 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
                 if val is None:  # Fallback safety
                     val = 0
             next_point_values.append(int(round(val)))
-        
+
         next_point = tuple(next_point_values)
-        
+
         # next_point = tuple(int(round(value(master.e[i]))) for i in master.e)
         return z_lb, next_point
 
