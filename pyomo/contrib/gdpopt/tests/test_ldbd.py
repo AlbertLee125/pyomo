@@ -406,7 +406,7 @@ class TestGDPoptLDBDUnit(unittest.TestCase):
         s.number_of_external_variables = 2
         s.config.direction_norm = DirectionNorm.Linf
         anchor = (2, 2)
-
+        s.data_manager.add(anchor, feasible=True, objective=1.0, source="t", iteration_found=0)
         calls = []
         solve_point_mock = mock.MagicMock()
 
