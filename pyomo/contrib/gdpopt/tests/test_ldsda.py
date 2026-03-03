@@ -30,10 +30,13 @@ from pyomo.core import maximize
 class TestGDPoptLDSDA(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
-    @unittest.skipUnless(
-        SolverFactory('gams').available(False)
-        and SolverFactory('gams').license_is_valid(),
-        "gams solver not available",
+    _missing_solvers = [
+        s for s in ("appsi_highs", "ipopt") if not SolverFactory(s).available(False)
+    ]
+
+    @unittest.skipIf(
+        bool(_missing_solvers),
+        f"Required solver(s) not available: {', '.join(_missing_solvers)}",
     )
     def test_solve_four_stage_dynamic_model(self):
 
@@ -58,8 +61,11 @@ class TestGDPoptLDSDA(unittest.TestCase):
             result = SolverFactory('gdpopt.ldsda').solve(
                 model,
                 direction_norm=direction_norm,
-                subproblem_solver='gams',
-                subproblem_solver_args=dict(solver='ipopth'),
+                subproblem_solver='mindtpy',
+                subproblem_solver_args={
+                    "mip_solver": "appsi_highs",
+                    "nlp_solver": "ipopt",
+                },
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
