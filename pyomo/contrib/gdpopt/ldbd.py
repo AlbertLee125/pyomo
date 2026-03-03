@@ -146,7 +146,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         already-evaluated best point without re-solving.
 
         Note: The results obtained for the mathematical problem benchmark may differ
-        from those reported in the original paper(Liñán, D. A.; Ricardez‐Sandoval, L. A., 2023) due to differences in
+        from those reported in the original paper (Liñán, D. A.; Ricardez‐Sandoval, L. A., 2023) due to differences in
         algorithm implementation details and solver versions.
         """
 
