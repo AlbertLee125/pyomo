@@ -498,7 +498,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
             anchor_feasible = anchor_obj > -config.infinity_output
         else:
             anchor_feasible = anchor_obj < config.infinity_output
-        
+
         if not anchor_feasible:
             return False
 
