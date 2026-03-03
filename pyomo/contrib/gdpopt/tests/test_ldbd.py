@@ -76,12 +76,6 @@ class TestGDPoptLDBD(unittest.TestCase):
         # Discretize the model using dae.collocation
         discretizer = TransformationFactory("dae.collocation")
         discretizer.apply_to(model, nfe=10, ncp=3, scheme="LAGRANGE-RADAU")
-        # We need to reconstruct the constraints in disjuncts after discretization.
-        # This is a bug in Pyomo.dae. https://github.com/Pyomo/pyomo/issues/3101
-        for disjunct in model.component_data_objects(ctype=Disjunct):
-            for constraint in disjunct.component_objects(ctype=Constraint):
-                constraint._constructed = False
-                constraint.construct()
 
         for dxdt in model.component_data_objects(ctype=Var, descend_into=True):
             if "dxdt" in dxdt.name:

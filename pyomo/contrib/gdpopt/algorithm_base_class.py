@@ -27,6 +27,8 @@ from pyomo.contrib.gdpopt.util import (
     solve_continuous_problem,
     time_code,
 )
+from pyomo.gdp import Disjunct
+from pyomo.core import Constraint
 from pyomo.core.base import Objective, value, minimize, maximize
 from pyomo.core.staleflag import StaleFlagManager
 from pyomo.opt import SolverResults
@@ -188,6 +190,45 @@ class _GDPoptAlgorithm:
                 'Time(s)',
             )
         )
+
+    def _has_dae_components(self, model):
+        try:
+            from pyomo.dae import ContinuousSet, DerivativeVar
+        except Exception:
+            return False
+
+        if any(
+            model.component_data_objects(ctype=ContinuousSet, descend_into=True)
+        ):
+            return True
+        if any(
+            model.component_data_objects(ctype=DerivativeVar, descend_into=True)
+        ):
+            return True
+        return False
+
+    def _reconstruct_disjunct_constraints_if_dae(self, model, logger=None):
+        if not self._has_dae_components(model):
+            return False
+
+        disjuncts = list(
+            model.component_data_objects(ctype=Disjunct, descend_into=True)
+        )
+        if not disjuncts:
+            return False
+
+        for disjunct in disjuncts:
+            for constraint in disjunct.component_objects(
+                ctype=Constraint, descend_into=True
+            ):
+                constraint._constructed = False
+                constraint.construct()
+
+        if logger is not None:
+            logger.debug(
+                "Reconstructed disjunct constraints after DAE discretization."
+            )
+        return True
 
     @property
     def objective_sense(self):
