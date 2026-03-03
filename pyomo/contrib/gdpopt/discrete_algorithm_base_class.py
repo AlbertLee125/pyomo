@@ -580,16 +580,23 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
               solver's incumbent bound.
             - ``objective`` is the objective value.
             - For infeasible points, ``objective`` returns a penalty value.
-            - This penalty is defined by ``config.infinity_output``.
+            - This penalty is defined by ``config.infinity_output`` (with sign
+              chosen according to the optimization sense).
 
         Notes
         -----
-        The ``config.infinity_output`` serves two primary purposes:
-        1. It provides a finite numerical penalty for infeasible discrete points.
-        2. It acts as a feasibility threshold for solver outputs.
-        If the subproblem is infeasible, the objective is set to this value.
-        If the solver returns a value $\\ge$ ``infinity_output``, the point is marked infeasible.
-        Using a large finite value instead of $inf$ prevents numerical errors in the master problem.
+        In this method, feasibility is determined solely by the result of
+        ``_solve_GDP_subproblem``:
+
+        - If ``primal_bound`` is ``None``, the discrete point is treated as
+          infeasible and ``config.infinity_output`` (with an appropriate sign)
+          is used as a finite numerical penalty for the objective.
+        - If ``primal_bound`` is a numeric value, the point is treated as
+          feasible and that value is used directly as the objective.
+
+        Using a large finite penalty instead of ``inf`` helps to prevent
+        numerical issues in the master problem while still clearly
+        distinguishing infeasible points from feasible ones.
         """
         # 1. Check if already visited (optional, depending on algorithm logic)
         # Some algos might re-evaluate, but usually we skip.
