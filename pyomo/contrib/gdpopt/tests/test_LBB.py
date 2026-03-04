@@ -12,7 +12,6 @@
 from io import StringIO
 import logging
 from math import fabs
-import os
 from os.path import abspath, dirname, join, normpath
 
 import pyomo.common.unittest as unittest
@@ -28,18 +27,12 @@ from pyomo.opt import TerminationCondition
 currdir = dirname(abspath(__file__))
 exdir = normpath(join(currdir, '..', '..', '..', '..', 'examples', 'gdp'))
 
-RUN_LARGE_TESTS = bool(int(os.environ.get('PYOMO_GDPOPT_RUN_LARGE_TESTS', '0')))
-
-
-# NOTE: GDPopt LBB solves a sequence of relaxed node subproblems where the
-# discrete decisions are fixed. MindtPy intentionally returns None when the
-# model contains no unfixed discrete variables (it directly solves the NLP/LP
-# and signals that MindtPy should not proceed). Use a standard NLP solver here.
-minlp_solver = 'ipopt'
-solver_available = SolverFactory(minlp_solver).available(exception_flag=False)
-
+minlp_solver = 'baron'
 minlp_args = dict()
-large_test_available = RUN_LARGE_TESTS and solver_available
+solver_available = SolverFactory(minlp_solver).available()
+license_available = (
+    SolverFactory(minlp_solver).license_is_valid() if solver_available else False
+)
 
 
 @unittest.skipUnless(
@@ -112,10 +105,7 @@ class TestGDPopt_LBB(unittest.TestCase):
     #     self.assertTrue(value(m.d.disjuncts[0].indicator_var))
     #     self.assertFalse(value(m.d.disjuncts[1].indicator_var))
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     def test_LBB_8PP(self):
         """Test the logic-based branch and bound algorithm."""
         exfile = import_file(join(exdir, 'eight_process', 'eight_proc_model.py'))
@@ -128,10 +118,7 @@ class TestGDPopt_LBB(unittest.TestCase):
         )
         ct.check_8PP_solution(self, eight_process, results)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     def test_LBB_8PP_max(self):
         """Test the logic-based branch and bound algorithm."""
         exfile = import_file(join(exdir, 'eight_process', 'eight_proc_model.py'))
@@ -147,10 +134,7 @@ class TestGDPopt_LBB(unittest.TestCase):
         )
         self.assertAlmostEqual(value(eight_process.profit.expr), -68, places=1)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     def test_LBB_strip_pack(self):
         """Test logic-based branch and bound with strip packing."""
         exfile = import_file(join(exdir, 'strip_packing', 'strip_packing_concrete.py'))
@@ -163,10 +147,7 @@ class TestGDPopt_LBB(unittest.TestCase):
         )
         self.assertTrue(fabs(value(strip_pack.total_length.expr) - 11) <= 1e-2)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     @unittest.pytest.mark.expensive
     def test_LBB_constrained_layout(self):
         """Test LBB with constrained layout."""
@@ -188,26 +169,13 @@ class TestGDPopt_LBB(unittest.TestCase):
         """Test LBB with Francisco thesis example."""
         exfile = import_file(join(exdir, 'small_lit', 'ex_633_trespalacios.py'))
         model = exfile.build_simple_nonconvex_gdp()
-        results = SolverFactory('gdpopt.lbb').solve(
+        SolverFactory('gdpopt.lbb').solve(
             model, tee=False, minlp_solver=minlp_solver, minlp_solver_args=minlp_args
         )
-        self.assertIn(
-            results.solver.termination_condition,
-            {TerminationCondition.optimal, TerminationCondition.feasible},
-        )
-        objective_value = value(model.obj.expr, exception=False)
-        self.assertIsNotNone(objective_value)
-        # Assert solution quality is within expected range (~4.46)
-        # Range allows for solver-dependent variations while catching regressions
-        self.assertTrue(
-            3.5 <= objective_value <= 5.5,
-            f"Objective value {objective_value} outside expected range [3.5, 5.5] (expected ~4.46)",
-        )
+        objective_value = value(model.obj.expr)
+        self.assertAlmostEqual(objective_value, 4.46, 2)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     @unittest.skipUnless(
         SolverFactory('bonmin').available(exception_flag=False),
         "Bonmin is not available",
@@ -247,14 +215,14 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
         self.assertEqual(
             result.solver.termination_condition, TerminationCondition.infeasible
         )
+        self.assertEqual(
+            result.solver.termination_condition, TerminationCondition.infeasible
+        )
         self.assertIsNone(m.x.value)
         self.assertIsNone(m.d.disjuncts[0].indicator_var.value)
         self.assertIsNone(m.d.disjuncts[1].indicator_var.value)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     def test_LBB_8PP(self):
         """Test the logic-based branch and bound algorithm."""
         exfile = import_file(join(exdir, 'eight_process', 'eight_proc_model.py'))
@@ -268,10 +236,7 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
         )
         ct.check_8PP_solution(self, eight_process, results)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     def test_LBB_strip_pack(self):
         """Test logic-based branch and bound with strip packing."""
         exfile = import_file(join(exdir, 'strip_packing', 'strip_packing_concrete.py'))
@@ -285,10 +250,7 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
         )
         self.assertTrue(fabs(value(strip_pack.total_length.expr) - 11) <= 1e-2)
 
-    @unittest.skipUnless(
-        large_test_available,
-        "Large test disabled or required open-source solvers unavailable",
-    )
+    @unittest.skipUnless(license_available, "Problem is too big for unlicensed BARON.")
     @unittest.pytest.mark.expensive
     def test_LBB_constrained_layout(self):
         """Test LBB with constrained layout."""
@@ -311,7 +273,7 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
         """Test LBB with Francisco thesis example."""
         exfile = import_file(join(exdir, 'small_lit', 'ex_633_trespalacios.py'))
         model = exfile.build_simple_nonconvex_gdp()
-        results = SolverFactory('gdpopt').solve(
+        SolverFactory('gdpopt').solve(
             model,
             algorithm='LBB',
             tee=False,
@@ -319,18 +281,8 @@ class TestGDPopt_LBB_Z3(unittest.TestCase):
             minlp_solver=minlp_solver,
             minlp_solver_args=minlp_args,
         )
-        self.assertIn(
-            results.solver.termination_condition,
-            {TerminationCondition.optimal, TerminationCondition.feasible},
-        )
-        objective_value = value(model.obj.expr, exception=False)
-        self.assertIsNotNone(objective_value)
-        # Assert solution quality is within expected range (~4.46)
-        # Range allows for solver-dependent variations while catching regressions
-        self.assertTrue(
-            3.5 <= objective_value <= 5.5,
-            f"Objective value {objective_value} outside expected range [3.5, 5.5] (expected ~4.46)",
-        )
+        objective_value = value(model.obj.expr)
+        self.assertAlmostEqual(objective_value, 4.46, 2)
 
 
 if __name__ == '__main__':
