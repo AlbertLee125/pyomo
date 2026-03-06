@@ -435,7 +435,7 @@ def _add_mip_solver_configs(CONFIG):
     CONFIG.declare(
         "mip_solver",
         ConfigValue(
-            default="gurobi",
+            default="appsi_highs",
             description="""
             Mixed-integer linear solver to use. Note that no persistent solvers
             other than the auto-persistent solvers in the APPSI package are
@@ -531,7 +531,36 @@ def _add_tolerance_configs(CONFIG):
     )
 
 
-def _add_ldsda_configs(CONFIG):
+def _add_discrete_algorithm_configs(CONFIG):
+    """Common configuration for discrete-search algorithms (LDSDA, LDBD).
+
+    This replaces the previous pattern of pulling in the full NLP/MINLP solver
+    configs via ``_add_nlp_solver_configs``.  Discrete algorithms treat the
+    fixed-disjunction subproblem as a generic optimisation problem that may be
+    an NLP *or* an MINLP, so a single ``subproblem_solver`` /
+    ``subproblem_solver_args`` pair is more appropriate than
+    ``minlp_solver`` / ``minlp_solver_args``.
+    """
+    CONFIG.declare(
+        "subproblem_solver",
+        ConfigValue(
+            default="baron",
+            description="""
+            Solver used for the fixed-disjunction subproblems.  The
+            subproblem may be NLP or MINLP depending on the model
+            structure; choose a solver capable of handling both, or
+            use 'mindtpy' as a meta-solver that dispatches internally.""",
+        ),
+    )
+    CONFIG.declare(
+        "subproblem_solver_args",
+        ConfigBlock(
+            description="""
+            Keyword arguments forwarded to the subproblem solver's
+            ``solve()`` invocation.""",
+            implicit=True,
+        ),
+    )
     CONFIG.declare(
         "direction_norm",
         ConfigValue(
@@ -564,5 +593,37 @@ def _add_ldsda_configs(CONFIG):
             The list of disjunctions to be reformulated into external variables.
             The disjunctions should be in the same order of provided starting point.
             """,
+        ),
+    )
+    CONFIG.declare(
+        'infinity_output',
+        ConfigValue(
+            default=1e8,
+            domain=NonNegativeFloat,
+            description="Value to use for infeasible points instead of infinity.",
+        ),
+    )
+
+
+def _add_ldsda_configs(CONFIG):
+    """LDSDA-specific configs (beyond the common discrete-algorithm configs)."""
+    pass
+
+
+def _add_ldbd_configs(CONFIG):
+    """LDBD-specific configs (beyond the common discrete-algorithm configs)."""
+    CONFIG.declare(
+        "separation_solver",
+        ConfigValue(
+            default="appsi_highs",
+            description=(
+                "LP solver to use for the LD-BD cut refinement (separation LP)."
+            ),
+        ),
+    )
+    CONFIG.declare(
+        "separation_solver_args",
+        ConfigBlock(
+            description="Keyword arguments for the separation LP solver.", implicit=True
         ),
     )

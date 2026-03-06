@@ -24,15 +24,19 @@ from unittest.mock import MagicMock
 from pyomo.core.expr.logical_expr import exactly
 from pyomo.contrib.gdpopt.ldsda import GDP_LDSDA_Solver
 from pyomo.opt import TerminationCondition as tc
+from pyomo.core import maximize
 
 
 class TestGDPoptLDSDA(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
-    @unittest.skipUnless(
-        SolverFactory('gams').available(False)
-        and SolverFactory('gams').license_is_valid(),
-        "gams solver not available",
+    _missing_solvers = [
+        s for s in ("appsi_highs", "ipopt") if not SolverFactory(s).available(False)
+    ]
+
+    @unittest.skipIf(
+        bool(_missing_solvers),
+        f"Required solver(s) not available: {', '.join(_missing_solvers)}",
     )
     def test_solve_four_stage_dynamic_model(self):
 
@@ -57,8 +61,11 @@ class TestGDPoptLDSDA(unittest.TestCase):
             result = SolverFactory('gdpopt.ldsda').solve(
                 model,
                 direction_norm=direction_norm,
-                minlp_solver='gams',
-                minlp_solver_args=dict(solver='ipopth'),
+                subproblem_solver='mindtpy',
+                subproblem_solver_args={
+                    "mip_solver": "appsi_highs",
+                    "nlp_solver": "ipopt",
+                },
                 starting_point=[1, 2],
                 logical_constraint_list=[
                     model.mode_transfer_lc1,
@@ -67,6 +74,7 @@ class TestGDPoptLDSDA(unittest.TestCase):
                 time_limit=100,
             )
             self.assertAlmostEqual(value(model.obj), -23.305325, places=4)
+            self.assertEqual(result.solver.termination_condition, tc.locallyOptimal)
 
 
 class TestLDSDALinearSearchUnit(unittest.TestCase):
@@ -81,6 +89,7 @@ class TestLDSDALinearSearchUnit(unittest.TestCase):
         # 2. Set up the fake internal state required for line_search
         solver.current_point = (0, 0)
         solver.best_direction = (1, 1)
+        solver._path = []  # Initialize path tracking
 
         # 3. Mock the internal methods
         # check_valid_neighbor: Always say the neighbor is valid
@@ -96,8 +105,9 @@ class TestLDSDALinearSearchUnit(unittest.TestCase):
 
         # 4. Run the method
         config = MagicMock()
+        config.infinity_output = 1e6
+        config.logger = None
         solver.line_search(config)
-
         # 5. Verify results
         # The solver should have moved exactly ONCE (from 0,0 to 1,1)
         self.assertEqual(solver.current_point, (1, 1))
@@ -139,7 +149,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.solver.any_termination_criterion_met = MagicMock(return_value=True)
         self.solver.neighbor_search = MagicMock()
         # 2. Mock internal setup methods
-        self.solver.get_external_information = MagicMock()
+        self.solver._get_external_information = MagicMock()
         self.solver._get_directions = MagicMock(return_value=[])
 
         # 3. FIX: Manually set the attribute that _get_external_information would have set
@@ -169,7 +179,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "should be a list of ExactlyExpression"
         ):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_exactly_number_greater_than_one(self):
         """
@@ -186,7 +196,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_logical_constraint_list = [self.model.lc]
 
         with self.assertRaisesRegex(ValueError, "only works for exactly_number = 1"):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_starting_point_mismatch(self):
         """
@@ -207,7 +217,7 @@ class TestLDSDAUnits(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "length of the provided starting point"
         ):
-            self.solver.get_external_information(self.model.util_block, self.config)
+            self.solver._get_external_information(self.model.util_block, self.config)
 
     def test_disjunction_list_processing(self):
         """
@@ -225,7 +235,7 @@ class TestLDSDAUnits(unittest.TestCase):
         self.model.util_block.config_disjunction_list = [self.model.disj]
         self.config.starting_point = [1]  # Correct length
 
-        self.solver.get_external_information(self.model.util_block, self.config)
+        self.solver._get_external_information(self.model.util_block, self.config)
 
         # Verify it processed the disjunction
         self.assertEqual(len(self.model.util_block.external_var_info_list), 1)
@@ -235,28 +245,55 @@ class TestLDSDAUnits(unittest.TestCase):
         """
         Test the tie-breaking logic in the neighbor search.
 
-        Verifies that when two neighbors offer improved objective values
-        within the integer tolerance, the algorithm selects the neighbor
-        that is Euclidean-farther from the current point.
+        Verifies that when two neighbors produce objective values that are
+        equal within the configured tolerance, the algorithm selects the
+        neighbor that is Euclidean-farther from the current point.
+
+        This is intentionally independent of whether the second neighbor
+        improves the global incumbent bound (i.e., it may not set
+        ``primal_improved``).
         """
         self.solver.current_point = (0, 0)
-        self.config.integer_tolerance = 1e-5
+        self.config.bound_tolerance = 1e-5
 
         # Manually define neighbors from (0, 0):
         # 1. (1, 0) - Distance 1
         # 2. (1, 1) - Distance sqrt(2) (further away)
         self.solver.directions = [(1, 0), (1, 1)]
+        self.solver._path = []  # Initialize path tracking
         self.solver._check_valid_neighbor = MagicMock(return_value=True)
 
         # Mock subproblems to return IDENTICAL objectives
         # This forces the code to check the distance to break the tie
         self.solver._solve_GDP_subproblem = MagicMock(
-            side_effect=[(True, 100.0), (True, 100.0)]
+            side_effect=[(True, 100.0), (False, 100.0)]
         )
-
+        self.solver.current_obj = (
+            110  # Set current objective to match the mocked subproblem results
+        )
         self.solver.neighbor_search(self.config)
 
         # It should pick (1,1) because it is further away (Tiebreaker rule)
+        self.assertEqual(self.solver.current_point, (1, 1))
+
+    def test_neighbor_search_maximization_selects_larger_objective(self):
+        """Test that neighbor selection respects a maximization objective."""
+        self.solver.current_point = (0, 0)
+        self.solver.current_obj = 0.0
+        # Force objective sense for this unit test
+        self.solver.pyomo_results = MagicMock()
+        self.solver.pyomo_results.problem.sense = maximize
+
+        self.config.bound_tolerance = 1e-6
+        self.solver.directions = [(1, 0), (1, 1)]
+        self.solver._path = []  # Initialize path tracking
+        self.solver._check_valid_neighbor = MagicMock(return_value=True)
+
+        # Under maximization, the (1,1) neighbor should be preferred due to larger objective
+        self.solver._solve_GDP_subproblem = MagicMock(
+            side_effect=[(True, 1.0), (False, 2.0)]
+        )
+        self.solver.neighbor_search(self.config)
         self.assertEqual(self.solver.current_point, (1, 1))
 
     def test_handle_subproblem_result_none(self):
