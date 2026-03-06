@@ -194,7 +194,7 @@ class _GDPoptAlgorithm:
     def _has_dae_components(self, model):
         try:
             from pyomo.dae import ContinuousSet, DerivativeVar
-        except Exception:
+        except ImportError:
             return False
 
         if any(

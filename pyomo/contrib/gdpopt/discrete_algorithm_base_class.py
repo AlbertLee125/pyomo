@@ -305,6 +305,13 @@ class _GDPoptDiscreteAlgorithm(_GDPoptAlgorithm):
         self.data_manager = DiscreteDataManager()
 
     def _ensure_dae_compatibility(self, model, logger=None):
+        """Apply any DAE-specific preprocessing needed by discrete algorithms.
+
+        By default, this delegates to the shared GDPopt helper that
+        reconstructs disjunct constraints after DAE discretization. Discrete
+        algorithms may override this hook if they need additional
+        compatibility handling.
+        """
         return self._reconstruct_disjunct_constraints_if_dae(model, logger)
 
     def _cache_point_solution(self, point, solved_model):
