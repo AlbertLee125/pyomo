@@ -48,15 +48,13 @@ from pyomo.opt import TerminationCondition
 class TestGDPoptLDBD(unittest.TestCase):
     """Real unit tests for GDPopt"""
 
-    @unittest.skipUnless(
-        all(
-            (
-                SolverFactory("mindtpy").available(False),
-                SolverFactory("appsi_highs").available(False),
-                SolverFactory("ipopt").available(False),
-            )
-        ),
-        "mindtpy/appsi_highs/ipopt not available",
+    _missing_solvers = [
+        s for s in ("appsi_highs", "ipopt") if not SolverFactory(s).available(False)
+    ]
+
+    @unittest.skipIf(
+        bool(_missing_solvers),
+        f"Required solver(s) not available: {', '.join(_missing_solvers)}",
     )
     def test_solve_four_stage_dynamic_model_minimize(self):
         """Solve a DAE-derived GDP instance (integration-style test).
