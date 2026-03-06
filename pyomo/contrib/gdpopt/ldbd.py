@@ -176,6 +176,7 @@ class GDP_LDBD_Solver(_GDPoptDiscreteAlgorithm):
         self.working_model_util_block = self.working_model.find_component(util_block)
 
         add_disjunction_list(self.working_model_util_block)
+        self._ensure_dae_compatibility(self.working_model, logger)
         TransformationFactory("core.logical_to_linear").apply_to(self.working_model)
         # Now that logical_to_disjunctive has been called.
         add_transformed_boolean_variable_list(self.working_model_util_block)
